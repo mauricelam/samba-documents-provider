@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/samba-documents-provider.iml" filepath="$PROJECT_DIR$/samba-documents-provider.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/samba-documents-provider.iml" filepath="$PROJECT_DIR$/.idea/modules/samba-documents-provider.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/samba-documents-provider.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/samba-documents-provider.app.iml" />
     </modules>
   </component>
 </project>
