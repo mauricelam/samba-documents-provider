@@ -40,7 +40,7 @@ find_library( # Sets the name of the path variable.
 # can link multiple libraries, such as libraries you define in the
 # build script, prebuilt third-party libraries, or system libraries.
 
-set(libfolder "${CMAKE_SOURCE_DIR}/src/main/jniLibs/${ANDROID_ABI}")
+set(libfolder "${CMAKE_SOURCE_DIR}/src/main/smblibs/${ANDROID_ABI}")
 add_library(libsmbclient
             SHARED
             IMPORTED)

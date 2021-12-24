@@ -19,6 +19,7 @@
 #define SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
 
 #include <unordered_map>
+#include <string>
 
 namespace SambaClient {
 struct CredentialTuple {

@@ -20,6 +20,7 @@
 
 #include <unordered_map>
 #include <jni.h>
+#include <string>
 
 namespace SambaClient {
 class JavaClassCache {

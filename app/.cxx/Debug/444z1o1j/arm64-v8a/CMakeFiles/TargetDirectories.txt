@@ -1,3 +1,0 @@
-/Users/mauricelam/Desktop/samba-documents-provider/app/.cxx/Debug/444z1o1j/arm64-v8a/CMakeFiles/rebuild_cache.dir
-/Users/mauricelam/Desktop/samba-documents-provider/app/.cxx/Debug/444z1o1j/arm64-v8a/CMakeFiles/edit_cache.dir
-/Users/mauricelam/Desktop/samba-documents-provider/app/.cxx/Debug/444z1o1j/arm64-v8a/CMakeFiles/samba_client.dir
