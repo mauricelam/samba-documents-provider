@@ -18,10 +18,9 @@
 package com.google.android.sambadocumentsprovider.provider;
 
 import android.os.AsyncTask;
-import android.os.CancellationSignal;
 import android.os.ParcelFileDescriptor;
 import android.os.ParcelFileDescriptor.AutoCloseOutputStream;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.util.Log;
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFile;
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient;

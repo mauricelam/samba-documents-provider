@@ -22,7 +22,7 @@ import android.database.MatrixCursor;
 import android.os.AsyncTask;
 import android.os.AsyncTask.Status;
 import android.os.Bundle;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.util.Log;
 import com.google.android.sambadocumentsprovider.BuildConfig;
 

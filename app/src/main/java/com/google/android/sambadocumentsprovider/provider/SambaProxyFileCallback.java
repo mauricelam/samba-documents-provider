@@ -18,10 +18,8 @@
 package com.google.android.sambadocumentsprovider.provider;
 
 import android.annotation.TargetApi;
-import android.net.Uri;
-import android.os.CancellationSignal;
 import android.os.ProxyFileDescriptorCallback;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.system.ErrnoException;
 import android.system.OsConstants;
 import android.system.StructStat;
@@ -30,7 +28,6 @@ import android.util.Log;
 import com.google.android.sambadocumentsprovider.base.OnTaskFinishedCallback;
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFile;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 

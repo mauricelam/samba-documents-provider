@@ -76,12 +76,9 @@ public class SambaProviderApplication extends Application {
     final File share = context.getExternalFilesDir(null);
     final SambaConfiguration sambaConf = new SambaConfiguration(home, share);
 
-    final OnConfigurationChangedListener listener = new OnConfigurationChangedListener() {
-      @Override
-      public void onConfigurationChanged() {
-        if (mSambaClient != null) {
-          mSambaClient.reset();
-        }
+    final OnConfigurationChangedListener listener = () -> {
+      if (mSambaClient != null) {
+        mSambaClient.reset();
       }
     };
 

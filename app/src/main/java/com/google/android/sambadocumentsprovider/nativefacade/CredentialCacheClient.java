@@ -20,7 +20,7 @@ package com.google.android.sambadocumentsprovider.nativefacade;
 import android.os.Bundle;
 import android.os.Looper;
 import android.os.Message;
-import android.support.annotation.IntDef;
+import androidx.annotation.IntDef;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 

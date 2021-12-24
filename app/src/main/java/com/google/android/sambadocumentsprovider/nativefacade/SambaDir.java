@@ -17,7 +17,7 @@
 
 package com.google.android.sambadocumentsprovider.nativefacade;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.system.ErrnoException;
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry;
 import java.io.IOException;

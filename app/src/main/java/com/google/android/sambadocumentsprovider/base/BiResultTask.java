@@ -18,10 +18,8 @@
 package com.google.android.sambadocumentsprovider.base;
 
 import android.os.AsyncTask;
-import android.support.annotation.IntDef;
-import android.support.annotation.Nullable;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
 
 public abstract class BiResultTask<Param, Progress, Result>
     extends AsyncTask<Param, Progress, Result> {

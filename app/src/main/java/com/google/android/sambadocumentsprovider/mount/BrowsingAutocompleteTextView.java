@@ -20,7 +20,7 @@ package com.google.android.sambadocumentsprovider.mount;
 import android.content.Context;
 import android.util.AttributeSet;
 
-public class BrowsingAutocompleteTextView extends android.support.v7.widget.AppCompatAutoCompleteTextView {
+public class BrowsingAutocompleteTextView extends androidx.appcompat.widget.AppCompatAutoCompleteTextView {
   public BrowsingAutocompleteTextView(Context context) {
     super(context);
   }

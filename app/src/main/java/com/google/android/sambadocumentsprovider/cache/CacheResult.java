@@ -17,12 +17,11 @@
 
 package com.google.android.sambadocumentsprovider.cache;
 
-import android.os.Build;
-import android.support.annotation.IntDef;
-import android.support.annotation.Nullable;
-import android.support.v4.util.Pools.Pool;
-import android.support.v4.util.Pools.SimplePool;
-import android.support.v4.util.Pools.SynchronizedPool;
+import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
+import androidx.core.util.Pools.Pool;
+import androidx.core.util.Pools.SimplePool;
+import androidx.core.util.Pools.SynchronizedPool;
 import com.google.android.sambadocumentsprovider.BuildConfig;
 import com.google.android.sambadocumentsprovider.document.DocumentMetadata;
 import java.lang.annotation.Retention;

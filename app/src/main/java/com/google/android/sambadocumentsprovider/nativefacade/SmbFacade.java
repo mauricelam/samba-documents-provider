@@ -21,7 +21,7 @@ import android.annotation.TargetApi;
 import android.os.ParcelFileDescriptor;
 import android.os.storage.StorageManager;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import com.google.android.sambadocumentsprovider.base.OnTaskFinishedCallback;
 import com.google.android.sambadocumentsprovider.provider.ByteBufferPool;
 

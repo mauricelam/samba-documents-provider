@@ -17,10 +17,9 @@
 
 package com.google.android.sambadocumentsprovider.nativefacade;
 
-import android.os.Bundle;
 import android.os.Looper;
 import android.os.Message;
-import android.support.annotation.IntDef;
+import androidx.annotation.IntDef;
 import android.system.StructStat;
 
 import java.io.IOException;

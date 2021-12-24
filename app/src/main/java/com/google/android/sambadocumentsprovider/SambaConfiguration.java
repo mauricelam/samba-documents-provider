@@ -17,7 +17,7 @@
 
 package com.google.android.sambadocumentsprovider;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.system.ErrnoException;
 import android.util.Log;
 import com.google.android.sambadocumentsprovider.base.BiResultTask;

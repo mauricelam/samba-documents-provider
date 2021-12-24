@@ -19,7 +19,7 @@ package com.google.android.sambadocumentsprovider.document;
 
 import android.net.Uri;
 import android.provider.DocumentsContract.Document;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import android.system.OsConstants;
 import android.system.StructStat;
 import android.text.TextUtils;

@@ -17,8 +17,8 @@
 
 package com.google.android.sambadocumentsprovider.nativefacade;
 
-import android.support.v4.util.Pools.Pool;
-import android.support.v4.util.Pools.SynchronizedPool;
+import androidx.core.util.Pools.Pool;
+import androidx.core.util.Pools.SynchronizedPool;
 import java.io.IOException;
 
 /**

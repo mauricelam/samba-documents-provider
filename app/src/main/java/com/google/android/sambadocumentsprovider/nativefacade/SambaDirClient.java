@@ -17,11 +17,10 @@
 
 package com.google.android.sambadocumentsprovider.nativefacade;
 
-import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.support.annotation.IntDef;
-import android.support.annotation.Nullable;
+import androidx.annotation.IntDef;
+import androidx.annotation.Nullable;
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry;
 import java.io.IOException;
 import java.lang.annotation.Retention;

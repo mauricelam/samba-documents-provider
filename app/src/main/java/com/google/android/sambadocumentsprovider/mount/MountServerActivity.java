@@ -19,18 +19,15 @@ package com.google.android.sambadocumentsprovider.mount;
 
 import static com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toRootId;
 
+import android.annotation.SuppressLint;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
-import android.provider.DocumentsContract;
-import android.support.annotation.Nullable;
-import android.support.annotation.StringRes;
-import android.support.design.widget.Snackbar;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.provider.DocumentsContract;
 import android.text.TextUtils;
 import android.text.method.LinkMovementMethod;
 import android.util.Log;
@@ -47,6 +44,12 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.Nullable;
+import androidx.annotation.StringRes;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.google.android.material.snackbar.Snackbar;
 import com.google.android.sambadocumentsprovider.R;
 import com.google.android.sambadocumentsprovider.SambaProviderApplication;
 import com.google.android.sambadocumentsprovider.ShareManager;
@@ -83,23 +86,15 @@ public class MountServerActivity extends AppCompatActivity {
     }
   };
 
-  private final OnClickListener mMountListener = new OnClickListener() {
-    @Override
-    public void onClick(View view) {
-      tryMount();
-    }
-  };
+  private final OnClickListener mMountListener = view -> tryMount();
 
-  private final OnKeyListener mMountKeyListener = new OnKeyListener() {
-    @Override
-    public boolean onKey(View view, int i, KeyEvent keyEvent) {
-      if (keyEvent.getAction() == KeyEvent.ACTION_UP
-          && keyEvent.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
-        tryMount();
-        return true;
-      }
-      return false;
+  private final OnKeyListener mMountKeyListener = (view, i, keyEvent) -> {
+    if (keyEvent.getAction() == KeyEvent.ACTION_UP
+        && keyEvent.getKeyCode() == KeyEvent.KEYCODE_ENTER) {
+      tryMount();
+      return true;
     }
+    return false;
   };
 
   private final OnTaskFinishedCallback<Map<String, List<String>>>  mBrowsingCallback
@@ -146,34 +141,29 @@ public class MountServerActivity extends AppCompatActivity {
     mShareManager = SambaProviderApplication.getServerManager(this);
     mClient = SambaProviderApplication.getSambaClient(this);
 
-    mNeedPasswordCheckbox = (CheckBox) findViewById(R.id.needs_password);
+    mNeedPasswordCheckbox = findViewById(R.id.needs_password);
     mNeedPasswordCheckbox.setOnClickListener(mPasswordStateChangeListener);
 
     mPasswordHideGroup = findViewById(R.id.password_hide_group);
 
-    mSharePathEditText = (BrowsingAutocompleteTextView) findViewById(R.id.share_path);
+    mSharePathEditText = findViewById(R.id.share_path);
     mSharePathEditText.setOnKeyListener(mMountKeyListener);
 
-    mUsernameEditText = (EditText) findViewById(R.id.username);
-    mDomainEditText = (EditText) findViewById(R.id.domain);
-    mPasswordEditText = (EditText) findViewById(R.id.password);
+    mUsernameEditText = findViewById(R.id.username);
+    mDomainEditText = findViewById(R.id.domain);
+    mPasswordEditText = findViewById(R.id.password);
     mPasswordEditText.setOnKeyListener(mMountKeyListener);
 
-    final Button mMountShareButton = (Button) findViewById(R.id.mount);
+    final Button mMountShareButton = findViewById(R.id.mount);
     mMountShareButton.setOnClickListener(mMountListener);
 
-    final Button cancel = (Button) findViewById(R.id.cancel);
-    cancel.setOnClickListener(new OnClickListener() {
-      @Override
-      public void onClick(View view) {
-        finish();
-      }
-    });
+    final Button cancel = findViewById(R.id.cancel);
+    cancel.setOnClickListener(view -> finish());
 
     setNeedsPasswordState(false);
 
     // Set MovementMethod to make it respond to clicks on hyperlinks
-    final TextView gplv3Link = (TextView) findViewById(R.id.gplv3_link);
+    final TextView gplv3Link = findViewById(R.id.gplv3_link);
     gplv3Link.setMovementMethod(LinkMovementMethod.getInstance());
 
     mConnectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
@@ -243,13 +233,11 @@ public class MountServerActivity extends AppCompatActivity {
     }
   }
 
+  @SuppressLint("ClickableViewAccessibility")
   private void startBrowsing() {
-    mSharePathEditText.setOnTouchListener(new View.OnTouchListener() {
-      @Override
-      public boolean onTouch(View view, MotionEvent motionEvent) {
-        mSharePathEditText.filter();
-        return false;
-      }
+    mSharePathEditText.setOnTouchListener((view, motionEvent) -> {
+      mSharePathEditText.filter();
+      return false;
     });
 
     mBrowsingAdapter = new BrowsingAutocompleteAdapter();
