@@ -1,3 +1,4 @@
 [submodule "samba"]
 	path = samba
 	url = https://github.com/mauricelam/samba.git
+	branch = android
