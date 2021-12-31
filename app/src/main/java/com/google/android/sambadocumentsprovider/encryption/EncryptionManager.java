@@ -22,18 +22,12 @@ import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
-import android.util.Log;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.UnrecoverableKeyException;
-import java.security.cert.CertificateException;
-import java.util.Random;
+import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -41,8 +35,6 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 
 public class EncryptionManager {
-  private static final String TAG = "EncryptionManager";
-
   private static final String ENCRYPTION_MANAGER_PREF_KEY = "encryptionManager";
   private static final String KEYSTORE_PROVIDER = "AndroidKeyStore";
   private static final String KEY_ALIAS = "SambaEncryptionKey";
@@ -51,9 +43,8 @@ public class EncryptionManager {
           KeyProperties.ENCRYPTION_PADDING_NONE;
   private static final int GCM_TAG_LENGTH = 128;
   private static final int IV_LENGTH = 12;
-  private static final String DEFAULT_CHARSET = "UTF-8";
 
-  private static final Random RANDOM = new Random();
+  private static final SecureRandom RANDOM = new SecureRandom();
 
   private final SharedPreferences mPref;
   private final EncryptionKey mKey;
@@ -73,7 +64,7 @@ public class EncryptionManager {
               Cipher.ENCRYPT_MODE, mKey.getKey(),
               new GCMParameterSpec(GCM_TAG_LENGTH, mKey.getIv()));
 
-      byte[] encrypted = cipher.doFinal(data.getBytes(Charset.forName(DEFAULT_CHARSET)));
+      byte[] encrypted = cipher.doFinal(data.getBytes(StandardCharsets.UTF_8));
 
       return Base64.encodeToString(encrypted, Base64.DEFAULT);
     } catch (Exception e) {
@@ -89,7 +80,7 @@ public class EncryptionManager {
               new GCMParameterSpec(GCM_TAG_LENGTH, mKey.getIv()));
 
       byte[] decrypted = cipher.doFinal(Base64.decode(data, Base64.DEFAULT));
-      return new String(decrypted, Charset.forName(DEFAULT_CHARSET));
+      return new String(decrypted, StandardCharsets.UTF_8);
     } catch (Exception e) {
       throw new EncryptionException("Failed to decrypt data: ", e);
     }
@@ -135,7 +126,7 @@ public class EncryptionManager {
       return store;
     } catch (GeneralSecurityException | IOException e) {
       // Should never happen.
-      throw new RuntimeException("Falied to init EncryptionManager: ", e);
+      throw new RuntimeException("Failed to init EncryptionManager: ", e);
     }
   }
 

@@ -55,4 +55,5 @@
   <string name="login">Login</string>
   <string name="authenticating">Authenticating...</string>
   <string name="empty_credentials">Username and password can not be empty!</string>
+    <string name="add">Add</string>
 </resources>

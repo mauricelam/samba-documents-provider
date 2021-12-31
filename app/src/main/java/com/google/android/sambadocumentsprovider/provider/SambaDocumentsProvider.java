@@ -44,7 +44,6 @@ import com.google.android.sambadocumentsprovider.BuildConfig;
 import com.google.android.sambadocumentsprovider.R;
 import com.google.android.sambadocumentsprovider.SambaProviderApplication;
 import com.google.android.sambadocumentsprovider.ShareManager;
-import com.google.android.sambadocumentsprovider.ShareManager.MountedShareChangeListener;
 import com.google.android.sambadocumentsprovider.TaskManager;
 import com.google.android.sambadocumentsprovider.auth.AuthActivity;
 import com.google.android.sambadocumentsprovider.base.AuthFailedException;
@@ -66,6 +65,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import kotlin.Unit;
 
 public class SambaDocumentsProvider extends DocumentsProvider {
 
@@ -92,24 +93,15 @@ public class SambaDocumentsProvider extends DocumentsProvider {
   };
 
   private final OnTaskFinishedCallback<Uri> mLoadDocumentCallback =
-      new OnTaskFinishedCallback<Uri>() {
-        @Override
-        public void onTaskFinished(@Status int status, @Nullable Uri uri, Exception exception) {
-          getContext().getContentResolver().notifyChange(toNotifyUri(uri), null, false);
-        }
-      };
+          (status, uri, exception) -> getContext().getContentResolver().notifyChange(toNotifyUri(uri), null, false);
 
   private final OnTaskFinishedCallback<DocumentMetadata> mLoadChildrenCallback =
-      new OnTaskFinishedCallback<DocumentMetadata>() {
-        @Override
-        public void onTaskFinished(@Status int status, DocumentMetadata metadata,
-            Exception exception) {
-          // Notify remote side that we get the list even though we don't have the stat yet.
-          // If it failed we still should notify the remote side that the loading failed.
-          getContext().getContentResolver().notifyChange(
-              toNotifyUri(metadata.getUri()), null, false);
-        }
-      };
+          (status, metadata, exception) -> {
+            // Notify remote side that we get the list even though we don't have the stat yet.
+            // If it failed we still should notify the remote side that the loading failed.
+            getContext().getContentResolver().notifyChange(
+                toNotifyUri(metadata.getUri()), null, false);
+          };
 
   private final OnTaskFinishedCallback<String> mWriteFinishedCallback =
       new OnTaskFinishedCallback<String>() {
@@ -127,15 +119,6 @@ public class SambaDocumentsProvider extends DocumentsProvider {
           getContext().getContentResolver().notifyChange(toNotifyUri(parentUri), null, false);
         }
       };
-
-  private final MountedShareChangeListener mShareChangeListener = new MountedShareChangeListener() {
-    @Override
-    public void onMountedServerChange() {
-      final Uri rootsUri = DocumentsContract.buildRootsUri(AUTHORITY);
-      final ContentResolver resolver = getContext().getContentResolver();
-      resolver.notifyChange(rootsUri, null, false);
-    }
-  };
 
   private ShareManager mShareManager;
   private SmbFacade mClient;
@@ -156,7 +139,12 @@ public class SambaDocumentsProvider extends DocumentsProvider {
     mTaskManager = SambaProviderApplication.getTaskManager(context);
     mBufferPool = new ByteBufferPool();
     mShareManager = SambaProviderApplication.getServerManager(context);
-    mShareManager.addListener(mShareChangeListener);
+    mShareManager.addListener(() -> {
+      final Uri rootsUri = DocumentsContract.buildRootsUri(AUTHORITY);
+      final ContentResolver resolver = getContext().getContentResolver();
+      resolver.notifyChange(rootsUri, null, false);
+      return Unit.INSTANCE;
+    });
     mStorageManager = (StorageManager) context.getSystemService(Context.STORAGE_SERVICE);
 
     return mClient != null;

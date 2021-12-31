@@ -23,12 +23,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class SambaMessageLooper {
 
-  private final Thread mLooperThread = new Thread(new Runnable() {
-    @Override
-    public void run() {
-      prepare();
-    }
-  });
+  private final Thread mLooperThread = new Thread(this::prepare, "SambaMessageLooper");
   private final CountDownLatch mLatch = new CountDownLatch(1);
 
   private volatile Looper mLooper;

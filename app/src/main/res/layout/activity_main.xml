@@ -49,13 +49,6 @@
         android:inputType="textUri"
         android:hint="@string/share_path"/>
 
-      <CheckBox
-        android:id="@+id/needs_password"
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/clickable_height"
-        android:checked="false"
-        android:text="@string/needs_password"/>
-
       <LinearLayout
         android:id="@+id/password_hide_group"
         android:layout_width="match_parent"
