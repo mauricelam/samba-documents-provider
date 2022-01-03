@@ -25,46 +25,34 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.lang.Exception
 
-internal class MountServerTask(
-    private val mMetadata: DocumentMetadata,
-    private val mDomain: String,
-    private val mUsername: String,
-    private val mPassword: String,
-    private val mClient: SmbClient,
-    private val mCache: DocumentCache,
-    private val mShareManager: ShareManager,
+private const val TAG = "MountServerTask"
+
+suspend fun mountServer(
+    metadata: DocumentMetadata,
+    domain: String,
+    username: String,
+    password: String,
+    client: SmbClient,
+    cache: DocumentCache,
+    shareManager: ShareManager,
 ) {
-    suspend fun execute() {
+    try {
         withContext(Dispatchers.IO) {
-            try {
-                mShareManager.addServer(
-                    mMetadata.uri.toString(), mDomain, mUsername, mPassword,
-                    { mMetadata.loadChildren(mClient) }, true
-                )
-                onSucceeded()
-            } catch (e: Exception) {
-                onFailed(e)
-                throw e
-            }
+            shareManager.addServer(
+                metadata.uri.toString(), domain, username, password,
+                { metadata.loadChildren(client) }, true
+            )
         }
-    }
-
-    private fun onSucceeded() {
-        for (metadata in mMetadata.children!!.values) {
-            mCache.put(metadata)
+        for (m in metadata.children!!.values) {
+            cache.put(m)
         }
-    }
-
-    private fun onFailed(e: Exception) {
+    } catch (e: Exception) {
         Log.e(TAG, "Failed to mount share.", e)
+        throw e
     }
 
-    fun onCancelled(arg: Void) {
-        // User cancelled the task, unmount it regardless of its result.
-        mShareManager.unmountServer(mMetadata.uri.toString())
-    }
-
-    companion object {
-        private const val TAG = "MountServerTask"
-    }
+//    fun onCancelled() {
+//        // User cancelled the task, unmount it regardless of its result.
+//        mShareManager.unmountServer(mMetadata.uri.toString())
+//    }
 }

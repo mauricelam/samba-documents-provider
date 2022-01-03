@@ -99,7 +99,7 @@ JNIEXPORT jlong JNICALL
 JNIEXPORT void JNICALL
     Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentialCache_putCredential(
     JNIEnv *env, jobject instance, jlong pointer,
-    jstring uri_, jstring workgroup_, jstring username_, jstring password_);
+    jstring uri_, jstring workgroup_, jstring username_, jstring password_, jboolean overwrite);
 
 JNIEXPORT void JNICALL
     Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentialCache_removeCredential(

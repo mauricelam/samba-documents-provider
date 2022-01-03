@@ -33,92 +33,90 @@ import kotlin.coroutines.suspendCoroutine
 /**
  * Helper class to scan for mDNS results
  */
-class MdnsManager {
-    companion object {
-        fun discover(context: Context, serviceName: String): Flow<List<NsdServiceInfo>> {
-            Log.d(
-                "FINDME",
-                "discover() called with: context = $context, serviceName = $serviceName"
-            )
-            val internalSet = LinkedHashSet<NsdServiceInfo>()
-            val nsdManager = context.getSystemService(NsdManager::class.java)
-            return callbackFlow {
-                val listener = object : NsdManager.DiscoveryListener {
-                    override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
-                        cancel("onStartDiscoveryFailed. serviceType = $serviceType, errorCode = $errorCode")
-                    }
+object MdnsManager {
+    fun discover(context: Context, serviceName: String): Flow<List<NsdServiceInfo>> {
+        Log.d(
+            "FINDME",
+            "discover() called with: context = $context, serviceName = $serviceName"
+        )
+        val internalSet = LinkedHashSet<NsdServiceInfo>()
+        val nsdManager = context.getSystemService(NsdManager::class.java)
+        return callbackFlow {
+            val listener = object : NsdManager.DiscoveryListener {
+                override fun onStartDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                    cancel("onStartDiscoveryFailed. serviceType = $serviceType, errorCode = $errorCode")
+                }
 
-                    override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {
-                        cancel("onStopDiscoveryFailed. serviceType = $serviceType, errorCode = $errorCode")
-                    }
+                override fun onStopDiscoveryFailed(serviceType: String?, errorCode: Int) {
+                    cancel("onStopDiscoveryFailed. serviceType = $serviceType, errorCode = $errorCode")
+                }
 
-                    override fun onDiscoveryStarted(serviceType: String?) {
-                        Log.d(
-                            "FINDME",
-                            "onDiscoveryStarted() called with: serviceType = $serviceType"
-                        )
-                    }
+                override fun onDiscoveryStarted(serviceType: String?) {
+                    Log.d(
+                        "FINDME",
+                        "onDiscoveryStarted() called with: serviceType = $serviceType"
+                    )
+                }
 
-                    override fun onDiscoveryStopped(serviceType: String?) {
-                        Log.d(
-                            "FINDME",
-                            "onDiscoveryStopped() called with: serviceType = $serviceType"
-                        )
-                    }
+                override fun onDiscoveryStopped(serviceType: String?) {
+                    Log.d(
+                        "FINDME",
+                        "onDiscoveryStopped() called with: serviceType = $serviceType"
+                    )
+                }
 
-                    override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
-                        Log.d("FINDME", "onServiceFound() called with: serviceInfo = $serviceInfo")
-                        serviceInfo ?: return
-                        launch {
-                            try {
-                                internalSet.add(resolveService(serviceInfo, nsdManager))
-                                trySend(internalSet.toList())
-                            } catch (e: RuntimeException) {
-                                Log.w("FINDME", "Unable to resolve service Info")
-                            }
+                override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
+                    Log.d("FINDME", "onServiceFound() called with: serviceInfo = $serviceInfo")
+                    serviceInfo ?: return
+                    launch {
+                        try {
+                            internalSet.add(resolveService(serviceInfo, nsdManager))
+                            trySend(internalSet.toList())
+                        } catch (e: RuntimeException) {
+                            Log.w("FINDME", "Unable to resolve service Info")
                         }
                     }
-
-                    override fun onServiceLost(serviceInfo: NsdServiceInfo?) {
-                        Log.d("FINDME", "onServiceLost() called with: serviceInfo = $serviceInfo")
-                        internalSet.remove(serviceInfo)
-                        trySend(internalSet.toList())
-                    }
-
                 }
-                nsdManager.discoverServices(serviceName, NsdManager.PROTOCOL_DNS_SD, listener)
-                awaitClose {
-                    try {
-                        nsdManager.stopServiceDiscovery(listener)
-                    } catch (e: IllegalArgumentException) {
-                        Log.d("FINDME", "Failed to stop discovery", e)
-                    }
+
+                override fun onServiceLost(serviceInfo: NsdServiceInfo?) {
+                    Log.d("FINDME", "onServiceLost() called with: serviceInfo = $serviceInfo")
+                    internalSet.remove(serviceInfo)
+                    trySend(internalSet.toList())
+                }
+
+            }
+            nsdManager.discoverServices(serviceName, NsdManager.PROTOCOL_DNS_SD, listener)
+            awaitClose {
+                try {
+                    nsdManager.stopServiceDiscovery(listener)
+                } catch (e: IllegalArgumentException) {
+                    Log.d("FINDME", "Failed to stop discovery", e)
                 }
             }
         }
+    }
 
-        private suspend fun resolveService(
-            serviceInfo: NsdServiceInfo,
-            nsdManager: NsdManager
-        ): NsdServiceInfo {
-            return suspendCoroutine {
-                nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                    override fun onResolveFailed(
-                        serviceInfo: NsdServiceInfo?,
-                        errorCode: Int
-                    ) {
-                        it.resumeWithException(RuntimeException("Resolve failed: $errorCode"))
-                    }
+    private suspend fun resolveService(
+        serviceInfo: NsdServiceInfo,
+        nsdManager: NsdManager
+    ): NsdServiceInfo {
+        return suspendCoroutine {
+            nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(
+                    serviceInfo: NsdServiceInfo?,
+                    errorCode: Int
+                ) {
+                    it.resumeWithException(RuntimeException("Resolve failed: $errorCode"))
+                }
 
-                    override fun onServiceResolved(serviceInfo: NsdServiceInfo?) {
-                        if (serviceInfo == null) {
-                            it.resumeWithException(RuntimeException("ServiceInfo cannot be null"))
-                            return
-                        }
-                        it.resume(serviceInfo)
+                override fun onServiceResolved(serviceInfo: NsdServiceInfo?) {
+                    if (serviceInfo == null) {
+                        it.resumeWithException(RuntimeException("ServiceInfo cannot be null"))
+                        return
                     }
-                })
-            }
+                    it.resume(serviceInfo)
+                }
+            })
         }
     }
 }

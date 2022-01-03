@@ -18,7 +18,6 @@
 package com.google.android.sambadocumentsprovider.mount
 
 import android.content.Intent
-import android.net.Uri
 import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -41,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import com.google.android.sambadocumentsprovider.R
 import com.google.android.sambadocumentsprovider.SambaProviderApplication
 import com.google.android.sambadocumentsprovider.ShareManager
@@ -59,11 +59,13 @@ class ServerListActivity : AppCompatActivity() {
             .catch { e -> Log.e("FINDME", "Error in server list", e) }
         setContent {
             MaterialTheme {
-                Scaffold(floatingActionButton = {
-                    FloatingActionButton(onClick = { addServerActivity(null) }) {
-                        Icon(Icons.Filled.Add, getString(R.string.add))
-                    }
-                }) {
+                Scaffold(
+                    topBar = { TopAppBar(title = { Text(title.toString()) }) },
+                    floatingActionButton = {
+                        FloatingActionButton(onClick = { addServerActivity(null) }) {
+                            Icon(Icons.Filled.Add, getString(R.string.add))
+                        }
+                    }) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         ServerList(serverList, getMountedServers())
                     }
@@ -72,15 +74,13 @@ class ServerListActivity : AppCompatActivity() {
         }
     }
 
-    private fun getMountedServers(): Flow<List<String>> {
-        return callbackFlow {
-            val listener: () -> Unit = {
-                trySend(shareManager.toList())
-            }
+    private fun getMountedServers(): StateFlow<List<String>> {
+        return callbackFlow<List<String>> {
+            val listener: () -> Unit = { trySend(shareManager.getShares()) }
             shareManager.addListener(listener)
 
             awaitClose { shareManager.removeListener(listener) }
-        }
+        }.stateIn(lifecycleScope, SharingStarted.Eagerly, shareManager.getShares())
     }
 
     private fun addServerActivity(serviceInfo: NsdServiceInfo?) {
@@ -93,10 +93,10 @@ class ServerListActivity : AppCompatActivity() {
     @Composable
     fun ServerList(
         serverList: Flow<List<NsdServiceInfo>>,
-        savedServerList: Flow<List<String>>
+        savedServerList: StateFlow<List<String>>
     ) {
         val serverListState by serverList.collectAsState(initial = emptyList())
-        val savedServerListState by savedServerList.collectAsState(shareManager.toList())
+        val savedServerListState by savedServerList.collectAsState()
         LazyColumn {
             items(serverListState) { serviceInfo ->
                 ListItem(
@@ -110,16 +110,18 @@ class ServerListActivity : AppCompatActivity() {
                 }
             }
             items(savedServerListState) { serverName ->
-                ListItem(
-                    modifier = Modifier.clickable { viewMountedDriveActivity(serverName) },
-                    icon = { Icon(Icons.Filled.Favorite, "") },
-                    trailing = {
-                        IconButton(onClick = { shareManager.unmountServer(serverName) }) {
-                            Icon(Icons.Filled.Eject, "Eject")
+                if (!serverName.endsWith("IPC$")) {
+                    ListItem(
+                        modifier = Modifier.clickable { viewMountedDriveActivity(serverName) },
+                        icon = { Icon(Icons.Filled.Favorite, "") },
+                        trailing = {
+                            IconButton(onClick = { shareManager.unmountServer(serverName) }) {
+                                Icon(Icons.Filled.Eject, "Eject")
+                            }
                         }
+                    ) {
+                        Text(text = serverName)
                     }
-                ) {
-                    Text(text = serverName)
                 }
             }
         }

@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <logger/logger.h>
 #include "CredentialCache.h"
 
 namespace SambaClient {
@@ -23,14 +24,20 @@ struct CredentialTuple emptyTuple_;
 
 struct CredentialTuple CredentialCache::get(const std::string &key) const {
   if (credentialMap_.find(key) != credentialMap_.end()) {
-    return credentialMap_.at(key);
+    auto ctuple = credentialMap_.at(key);
+    LOGV("FINDME", "ctuple=%s -- %s", ctuple.username.c_str(), ctuple.password.c_str());
+    return ctuple;
   } else {
     return emptyTuple_;
   }
 }
 
-void CredentialCache::put(const char *key, const struct CredentialTuple &tuple) {
-  credentialMap_[key] = tuple;
+void CredentialCache::put(const char *key, const struct CredentialTuple &tuple, bool overwrite) {
+  if (overwrite) {
+    credentialMap_[key] = tuple;
+  } else {
+    credentialMap_.emplace(key, tuple);
+  }
 }
 
 void CredentialCache::remove(const char *key_) {

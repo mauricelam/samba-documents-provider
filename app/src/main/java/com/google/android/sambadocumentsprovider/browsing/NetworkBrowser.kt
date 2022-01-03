@@ -18,66 +18,64 @@ package com.google.android.sambadocumentsprovider.browsing
 
 import android.net.Uri
 import android.util.Log
-import com.google.android.sambadocumentsprovider.TaskManager
+import androidx.annotation.WorkerThread
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry
 import com.google.android.sambadocumentsprovider.browsing.broadcast.BroadcastBrowsingProvider
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
+import com.google.android.sambadocumentsprovider.nativefacade.SmbDir
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.util.*
 
 /**
  * This class discovers Samba servers and shares under them available on the local network.
  */
-class NetworkBrowser(client: SmbClient, taskManager: TaskManager) {
-    private val mMasterProvider: NetworkBrowsingProvider
-    private val mBroadcastProvider: NetworkBrowsingProvider
-    private val mTaskManager: TaskManager
-    private val mClient: SmbClient
+class NetworkBrowser(client: SmbClient) {
+    private val masterProvider: NetworkBrowsingProvider
+    private val broadcastProvider: NetworkBrowsingProvider
+    private val smbClient: SmbClient
 
     /**
      * Asynchronously get available servers and shares under them.
      * A server name is mapped to the list of its children.
      */
-    suspend fun getSharesAsync(): Map<String, List<String>> {
+    suspend fun getSharesAsync(serverUri: String): Map<String, List<String>> {
         return withContext(Dispatchers.IO) {
-            loadServers().mapNotNull { server ->
-                try {
-                    server to getSharesForServer(server)
-                } catch (e: IOException) {
-                    Log.e(TAG, "Failed to load shares for server", e)
-                    null
-                }
-            }.toMap()
+            mapOf(serverUri to getSharesForServer(serverUri))
         }
-//        mTaskManager.runTask(SMB_BROWSING_URI, loadServersTask)
     }
 
+    @WorkerThread
     @Throws(IOException::class)
-    private fun getSharesForServer(server: String): List<String> {
-        val shares: MutableList<String> = ArrayList()
-        val serverUri = SMB_BROWSING_URI.toString() + server
-        val serverDir = mClient.openDir(serverUri)
-        var shareEntry: DirectoryEntry
-        while (serverDir.readDir().also { shareEntry = it!! } != null) {
-            if (shareEntry.type == DirectoryEntry.FILE_SHARE) {
-                shares.add(serverUri + "/" + shareEntry.name.trim { it <= ' ' })
-            } else {
-                Log.i(TAG, "Unsupported entry type: " + shareEntry.type)
+    private fun getSharesForServer(serverUri: String): List<String> {
+        return smbClient.openDir(serverUri).iterDir()
+            .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
+            .toList()
+    }
+
+    private fun SmbDir.iterDir(): Sequence<DirectoryEntry> {
+        return sequence {
+            var shareEntry: DirectoryEntry?
+            while (readDir().also { shareEntry = it } != null) {
+                shareEntry?.let { share ->
+                    if (share.type == DirectoryEntry.Type.FILE_SHARE) {
+                        yield(share)
+                    } else {
+                        Log.i(TAG, "Unsupported entry type: ${share.type}")
+                    }
+                }
             }
         }
-        return shares
     }
 
     @Throws(BrowsingException::class)
     private fun loadServers(): List<String> {
         return try {
-            mMasterProvider.servers
+            masterProvider.servers
         } catch (e: BrowsingException) {
             Log.e(TAG, "Master browsing failed", e)
             null
-        }?.takeUnless { it.isEmpty() } ?: mBroadcastProvider.servers
+        }?.takeUnless { it.isEmpty() } ?: broadcastProvider.servers
     }
 
     companion object {
@@ -86,9 +84,8 @@ class NetworkBrowser(client: SmbClient, taskManager: TaskManager) {
     }
 
     init {
-        mMasterProvider = MasterBrowsingProvider(client)
-        mBroadcastProvider = BroadcastBrowsingProvider()
-        mTaskManager = taskManager
-        mClient = client
+        masterProvider = MasterBrowsingProvider(client)
+        broadcastProvider = BroadcastBrowsingProvider()
+        smbClient = client
     }
 }

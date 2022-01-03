@@ -17,7 +17,6 @@
 package com.google.android.sambadocumentsprovider
 
 import android.content.Context
-import android.text.TextUtils
 import android.util.JsonReader
 import android.util.JsonToken
 import android.util.JsonWriter
@@ -29,11 +28,12 @@ import java.io.IOException
 import java.io.StringReader
 import java.io.StringWriter
 import java.util.*
+import kotlin.collections.ArrayList
 
 class ShareManager internal constructor(
     context: Context,
     private val mCredentialCache: CredentialCache
-) : Iterable<String> {
+) {
     private val mPref =
         context.getSharedPreferences(SERVER_CACHE_PREF_KEY, Context.MODE_PRIVATE)
     private val mServerStringSet: MutableSet<String>
@@ -74,7 +74,7 @@ class ShareManager internal constructor(
         checker: () -> Unit, mount: Boolean
     ) {
         checkServerCredentials(uri, workgroup, username, password, checker)
-        val hasPassword = !TextUtils.isEmpty(username) && !TextUtils.isEmpty(password)
+        val hasPassword = username.isNotEmpty() && password.isNotEmpty()
         val tuple = if (hasPassword) ShareTuple(
             workgroup,
             username,
@@ -106,22 +106,40 @@ class ShareManager internal constructor(
         }
     }
 
+    /**
+     * Add temporary credentials to a server, for fetching available shares on a server. Typically
+     * in this case {@code uri} will be a URI without a specified share.
+     *
+     * Temporary credentials added through this method will be cleared once the app process is
+     * killed.
+     */
+    fun addTemporaryCredentials(
+        uri: String,
+        workgroup: String,
+        username: String,
+        password: String
+    ) {
+        checkServerCredentials(uri, workgroup, username, password, checker = {}, temporary = true)
+    }
+
     @Throws(IOException::class)
     private fun checkServerCredentials(
         uri: String,
         workgroup: String,
         username: String,
         password: String,
-        checker: () -> Unit
+        checker: () -> Unit,
+        temporary: Boolean = false,
     ) {
         if (username.isNotEmpty() && password.isNotEmpty()) {
-            mCredentialCache.putCredential(uri, workgroup, username, password)
+            mCredentialCache.putCredential(
+                uri,
+                workgroup,
+                username,
+                password,
+                overwrite = !temporary
+            )
         }
-        runMountChecker(uri, checker)
-    }
-
-    @Throws(IOException::class)
-    private fun runMountChecker(uri: String, checker: () -> Unit) {
         try {
             checker()
         } catch (e: Exception) {
@@ -160,14 +178,8 @@ class ShareManager internal constructor(
     }
 
     @Synchronized
-    override fun iterator(): MutableIterator<String> {
-        // Create a deep copy of current set to avoid modification on iteration.
-        return ArrayList(mServerStringMap.keys).iterator()
-    }
-
-    @Synchronized
-    fun size(): Int {
-        return mServerStringMap.size
+    fun getShares(): List<String> {
+        return mServerStringMap.keys.toList()
     }
 
     @Synchronized

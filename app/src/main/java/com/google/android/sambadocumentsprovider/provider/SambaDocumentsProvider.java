@@ -157,7 +157,7 @@ public class SambaDocumentsProvider extends DocumentsProvider {
 
     MatrixCursor cursor = new MatrixCursor(projection);
 
-    for (String uri : mShareManager) {
+    for (String uri : mShareManager.getShares()) {
       if (!mShareManager.isShareMounted(uri)) {
         continue;
       }
@@ -396,7 +396,7 @@ public class SambaDocumentsProvider extends DocumentsProvider {
 
       boolean isDir = Document.MIME_TYPE_DIR.equals(mimeType);
       final DirectoryEntry entry = new DirectoryEntry(
-          isDir ? DirectoryEntry.DIR : DirectoryEntry.FILE,
+          isDir ? DirectoryEntry.Type.DIR : DirectoryEntry.Type.FILE,
           "", // comment
           displayName);
       final Uri uri = DocumentMetadata.buildChildUri(parentUri, entry);

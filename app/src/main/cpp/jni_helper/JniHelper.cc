@@ -167,6 +167,7 @@ Java_com_google_android_sambadocumentsprovider_nativefacade_NativeSambaFacade_op
     switch (err) {
       case ENODEV:
       case ENOENT:
+        LOGW(TAG, "Directory not found error: %d", err);
         throw_new_file_not_found_exception(
             env, "Directory at %s can't be found.", uri);
         break;
@@ -605,35 +606,34 @@ jlong Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredenti
 
 void Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentialCache_putCredential(
     JNIEnv *env, jobject instance, jlong pointer,
-    jstring uri_, jstring workgroup_, jstring username_, jstring password_) {
+    jstring uri_, jstring workgroup_, jstring username_, jstring password_, jboolean overwrite) {
 
   const char *uri;
   const char *workgroup;
   const char *username;
   const char *password;
   uri = env->GetStringUTFChars(uri_, 0);
-  if (uri == NULL) {
+  if (uri == nullptr) {
     return;
   }
   workgroup = env->GetStringUTFChars(workgroup_, 0);
-  if (workgroup == NULL) {
+  if (workgroup == nullptr) {
     goto bail_workgroup;
   }
   username = env->GetStringUTFChars(username_, 0);
-  if (username == NULL) {
+  if (username == nullptr) {
     goto bail_username;
   }
   password = env->GetStringUTFChars(password_, 0);
-  if (password == NULL) {
+  if (password == nullptr) {
     goto bail_password;
   }
 
   {
-    SambaClient::CredentialCache *cache =
-        reinterpret_cast<SambaClient::CredentialCache *>(pointer);
+    auto *cache = reinterpret_cast<SambaClient::CredentialCache *>(pointer);
     SambaClient::CredentialTuple tuple =
         {std::string(workgroup), std::string(username), std::string(password)};
-    cache->put(uri, tuple);
+    cache->put(uri, tuple, overwrite);
   }
 
   env->ReleaseStringUTFChars(password_, password);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2022 Google Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -15,27 +15,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
-#define SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
+package com.google.android.sambadocumentsprovider
 
-#include <unordered_map>
-#include <string>
-
-namespace SambaClient {
-struct CredentialTuple {
-  std::string workgroup;
-  std::string username;
-  std::string password;
-};
-
-class CredentialCache {
- public:
-  struct CredentialTuple get(const std::string &key) const;
-  void put(const char *key, const struct CredentialTuple &tuple, const bool overwrite);
-  void remove(const char *key);
- private:
-  std::unordered_map<std::string, CredentialTuple> credentialMap_;
-};
+fun <T> catchExceptions(block: () -> T): T? {
+    return try {
+        block()
+    } catch (e: Exception) {
+        null
+    }
 }
-
-#endif //SAMBADOCUMENTSPROVIDER_SERVERCACHE_H

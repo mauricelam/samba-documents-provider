@@ -14,10 +14,31 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package com.google.android.sambadocumentsprovider.base
 
-package com.google.android.sambadocumentsprovider.nativefacade;
+/**
+ * Denotes a directory entry in Samba. This can represent not only a directory in Samba, but also
+ * a workgroup, a share or a file.
+ */
+data class DirectoryEntry(
+    val type: Type, val comment: String, var name: String?
+) {
 
-public interface CredentialCache {
-  void putCredential(String uri, String workgroup, String username, String password);
-  void removeCredential(String uri);
+    constructor(typeInt: Int, comment: String, name: String) : this(
+        Type.values().firstOrNull { it.value == typeInt }!!,
+        comment,
+        name
+    )
+
+    enum class Type(val value: Int) {
+        WORKGROUP(1),
+        SERVER(2),
+        FILE_SHARE(3),
+        PRINTER_SHARE(4),
+        COMMS_SHARE(5),
+        IPC_SHARE(6),
+        DIR(7),
+        FILE(8),
+        LINK(9),
+    }
 }

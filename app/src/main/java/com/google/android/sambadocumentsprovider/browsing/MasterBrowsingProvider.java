@@ -17,6 +17,8 @@
 
 package com.google.android.sambadocumentsprovider.browsing;
 
+import android.util.Log;
+
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry;
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient;
 import com.google.android.sambadocumentsprovider.nativefacade.SmbDir;
@@ -40,22 +42,23 @@ class MasterBrowsingProvider implements NetworkBrowsingProvider {
 
     try {
       SmbDir rootDir = mClient.openDir(MASTER_BROWSING_DIR);
+      Log.d("FINDME", "Master browsing dir=" + rootDir);
 
       List<DirectoryEntry> workgroups = getDirectoryChildren(rootDir);
       for (DirectoryEntry workgroup : workgroups) {
-        if (workgroup.getType() == DirectoryEntry.WORKGROUP) {
+        if (workgroup.getType() == DirectoryEntry.Type.WORKGROUP) {
           List<DirectoryEntry> servers = getDirectoryChildren
                   (mClient.openDir(MASTER_BROWSING_DIR + workgroup.getName()));
 
           for (DirectoryEntry server : servers) {
-            if (server.getType() == DirectoryEntry.SERVER) {
+            if (server.getType() == DirectoryEntry.Type.SERVER) {
               serversList.add(server.getName());
             }
           }
         }
       }
     } catch (IOException e) {
-      throw new BrowsingException(e.getMessage());
+      throw new BrowsingException(e.getMessage(), e);
     }
 
     return serversList;

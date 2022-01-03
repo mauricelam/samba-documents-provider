@@ -14,28 +14,9 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package com.google.android.sambadocumentsprovider.nativefacade
 
-#ifndef SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
-#define SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
-
-#include <unordered_map>
-#include <string>
-
-namespace SambaClient {
-struct CredentialTuple {
-  std::string workgroup;
-  std::string username;
-  std::string password;
-};
-
-class CredentialCache {
- public:
-  struct CredentialTuple get(const std::string &key) const;
-  void put(const char *key, const struct CredentialTuple &tuple, const bool overwrite);
-  void remove(const char *key);
- private:
-  std::unordered_map<std::string, CredentialTuple> credentialMap_;
-};
+interface CredentialCache {
+    fun putCredential(uri: String, workgroup: String, username: String, password: String, overwrite: Boolean = true)
+    fun removeCredential(uri: String)
 }
-
-#endif //SAMBADOCUMENTSPROVIDER_SERVERCACHE_H
