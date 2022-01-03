@@ -33,21 +33,19 @@ public class DocumentCache {
   public CacheResult get(Uri uri) {
     DocumentMetadata metadata = mCache.get(uri);
     if (metadata == null) {
-      return CacheResult.obtain(CacheResult.CACHE_MISS, null);
+      return CacheResult.obtain(CacheResult.State.CACHE_MISS, null);
     }
 
     if (metadata.getTimeStamp() + CACHE_EXPIRATION < System.currentTimeMillis()) {
-      return CacheResult.obtain(CacheResult.CACHE_EXPIRED, metadata);
+      return CacheResult.obtain(CacheResult.State.CACHE_EXPIRED, metadata);
     }
 
-    return CacheResult.obtain(CacheResult.CACHE_HIT, metadata);
+    return CacheResult.obtain(CacheResult.State.CACHE_HIT, metadata);
   }
 
   public void throwLastExceptionIfAny(Uri uri) throws Exception {
     if (mExceptionCache.containsKey(uri)) {
-      Exception e = mExceptionCache.get(uri);
-      mExceptionCache.remove(uri);
-      throw e;
+      throw mExceptionCache.remove(uri);
     }
   }
 

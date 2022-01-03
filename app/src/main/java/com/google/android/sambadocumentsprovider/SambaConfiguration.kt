@@ -20,7 +20,8 @@ import kotlin.jvm.Synchronized
 import kotlin.Throws
 import android.system.ErrnoException
 import android.util.Log
-import com.google.android.sambadocumentsprovider.base.BiResultTask
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.*
 import java.util.HashMap
 
@@ -51,7 +52,7 @@ internal class SambaConfiguration(private val mHomeFolder: File, shareFolder: Fi
 
     private var mShareFolder: File? = null
     private val mConfigurations: MutableMap<String, String> = HashMap()
-    fun flushDefault(listener: () -> Unit) {
+    suspend fun flushDefault() {
         // lmhosts are not used in SambaDocumentsProvider and prioritize bcast because sometimes in home
         // settings DNS will resolve unknown domain name to a specific IP for advertisement.
         //
@@ -66,7 +67,9 @@ internal class SambaConfiguration(private val mHomeFolder: File, shareFolder: Fi
         addConfiguration("client max protocol", "SMB3")
         val smbFile = getSmbFile(mHomeFolder)
         if (!smbFile.exists()) {
-            flush(listener)
+            withContext(Dispatchers.IO) {
+                write()
+            }
         }
     }
 
@@ -82,22 +85,20 @@ internal class SambaConfiguration(private val mHomeFolder: File, shareFolder: Fi
         return this
     }
 
-    fun syncFromExternal(listener: () -> Unit): Boolean {
+    suspend fun syncFromExternal(): Boolean {
         val smbFile = getSmbFile(mHomeFolder)
         val extSmbFile = getExtSmbFile(mShareFolder)
         if (extSmbFile.isFile && extSmbFile.lastModified() > smbFile.lastModified()) {
             if (BuildConfig.DEBUG) Log.d(
-                TAG, "Syncing " + SMB_CONF_FILE +
-                        " from external source to internal source."
+                TAG, "Syncing $SMB_CONF_FILE from external source to internal source."
             )
-            SyncTask(listener).execute(extSmbFile)
+            withContext(Dispatchers.IO) {
+                read(extSmbFile)
+                write()
+            }
             return true
         }
         return false
-    }
-
-    private fun flush(listener: () -> Unit) {
-        FlushTask(listener).execute()
     }
 
     @Synchronized
@@ -139,36 +140,10 @@ internal class SambaConfiguration(private val mHomeFolder: File, shareFolder: Fi
 
     @Throws(ErrnoException::class)
     private external fun setEnv(`var`: String, value: String)
+
     @Synchronized
     override fun iterator(): MutableIterator<Map.Entry<String, String>> {
         return mConfigurations.entries.iterator()
-    }
-
-    private inner class SyncTask(private val mListener: () -> Unit) :
-        BiResultTask<File?, Void?, Void?>() {
-        @Throws(IOException::class)
-        override fun run(vararg params: File?): Void? {
-            read(params[0]!!)
-            write()
-            return null
-        }
-
-        override fun onSucceeded(result: Void?) {
-            mListener()
-        }
-    }
-
-    private inner class FlushTask(private val mListener: () -> Unit) :
-        BiResultTask<Void?, Void?, Void?>() {
-        @Throws(IOException::class)
-        override fun run(vararg params: Void?): Void? {
-            write()
-            return null
-        }
-
-        override fun onSucceeded(result: Void?) {
-            mListener()
-        }
     }
 
     init {

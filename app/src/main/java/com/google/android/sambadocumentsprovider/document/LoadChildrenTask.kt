@@ -14,29 +14,23 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package com.google.android.sambadocumentsprovider.document
 
-package com.google.android.sambadocumentsprovider.provider;
+import com.google.android.sambadocumentsprovider.cache.DocumentCache
+import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
-import androidx.core.util.Pools;
-import java.nio.ByteBuffer;
-
-public class ByteBufferPool {
-
-  private static final int BUFFER_CAPACITY = 1024 * 1024;
-  private final Pools.Pool<ByteBuffer> mBufferPool = new Pools.SynchronizedPool<>(16);
-
-  public ByteBuffer obtainBuffer() {
-    ByteBuffer buffer = mBufferPool.acquire();
-
-    if (buffer == null) {
-      buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+suspend fun DocumentMetadata.loadChildren(
+    client: SmbClient,
+    cache: DocumentCache
+) {
+    val metadata = this
+    return withContext(Dispatchers.IO + NonCancellable) {
+        loadChildren(client)
+        children?.values?.forEach { _ ->
+            cache.put(metadata)
+        }
     }
-
-    return buffer;
-  }
-
-  public void recycleBuffer(ByteBuffer buffer) {
-    buffer.clear();
-    mBufferPool.release(buffer);
-  }
 }

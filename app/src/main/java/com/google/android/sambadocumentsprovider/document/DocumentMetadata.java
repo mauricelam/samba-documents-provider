@@ -221,6 +221,19 @@ public class DocumentMetadata {
         return mChildren.get();
     }
 
+    @Override
+    public String toString() {
+        return "DocumentMetadata{" +
+                "mEntry=" + mEntry +
+                ", mUri=" + mUri +
+                ", mStat=" + mStat +
+                ", mChildren=" + mChildren +
+                ", mLastChildUpdateException=" + mLastChildUpdateException +
+                ", mLastStatException=" + mLastStatException +
+                ", mTimeStamp=" + mTimeStamp +
+                '}';
+    }
+
     public void loadChildren(SmbClient client) throws IOException {
         try (final SmbDir dir = client.openDir(mUri.toString())) {
 

@@ -57,7 +57,6 @@ import kotlinx.coroutines.launch
 
 class MountServerActivity : AppCompatActivity() {
     private lateinit var cache: DocumentCache
-    private lateinit var taskManager: TaskManager
     private lateinit var shareManager: ShareManager
     private lateinit var smbClient: SmbClient
 
@@ -97,7 +96,7 @@ class MountServerActivity : AppCompatActivity() {
                         serviceInfo?.let { info ->
                             val port = info.port.takeIf { it != 445 }?.let { ":$it" } ?: ""
                             "smb://${info.serviceName}.local${port}"
-                        } ?: "smb://"
+                        } ?: ""
                     )
                 },
                 domainState = rememberSaveable { mutableStateOf("") },
@@ -155,7 +154,6 @@ class MountServerActivity : AppCompatActivity() {
         }
 
         cache = SambaProviderApplication.getDocumentCache(this)
-        taskManager = SambaProviderApplication.getTaskManager(this)
         shareManager = SambaProviderApplication.getServerManager(this)
         smbClient = SambaProviderApplication.getSambaClient(this)
         connectivityManager = getSystemService(ConnectivityManager::class.java)

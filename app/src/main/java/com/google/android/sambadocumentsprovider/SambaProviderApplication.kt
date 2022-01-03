@@ -28,6 +28,8 @@ import android.net.ConnectivityManager.NetworkCallback
 import android.net.Network
 import android.util.Log
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 
 class SambaProviderApplication : Application() {
     private val cache = DocumentCache()
@@ -48,12 +50,12 @@ class SambaProviderApplication : Application() {
             return
         }
         initialized = true
-        initializeSambaConf(context)
         val looper = SambaMessageLooper()
         val credentialCache = looper.credentialCache
         sambaClient = looper.client
         shareManager = ShareManager(context, credentialCache)
         networkBrowser = NetworkBrowser(sambaClient)
+        initializeSambaConf(context)
         registerNetworkCallback(context)
     }
 
@@ -61,19 +63,20 @@ class SambaProviderApplication : Application() {
         val home = context.getDir("home", MODE_PRIVATE)
         val share = context.getExternalFilesDir(null)
         val sambaConf = SambaConfiguration(home, share)
-        val listener: () -> Unit = { sambaClient.reset() }
 
-        // Sync from external folder. The reason why we don't use external folder directly as HOME is
-        // because there are cases where external storage is not ready, and we don't have an external
-        // folder at all.
-        if (sambaConf.syncFromExternal(listener)) {
-            if (BuildConfig.DEBUG) Log.d(
-                TAG, "Syncing smb.conf from external folder. No need to try "
-                        + "flushing default config."
-            )
-            return
+        // Sync from external folder. The reason why we don't use external folder directly as HOME
+        // is because there are cases where external storage is not ready, and we don't have an
+        // external folder at all.
+        GlobalScope.launch {
+            if (sambaConf.syncFromExternal()) {
+                if (BuildConfig.DEBUG) Log.d(
+                    TAG, "Syncing smb.conf from external folder. No need to flush default config."
+                )
+            } else {
+                sambaConf.flushDefault()
+            }
+            sambaClient.reset()
         }
-        sambaConf.flushDefault(listener)
     }
 
     private fun registerNetworkCallback(context: Context) {

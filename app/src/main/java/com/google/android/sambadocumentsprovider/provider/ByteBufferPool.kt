@@ -14,32 +14,25 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package com.google.android.sambadocumentsprovider.provider
 
-#include <logger/logger.h>
-#include "CredentialCache.h"
+import androidx.core.util.Pools
+import androidx.core.util.Pools.SynchronizedPool
+import java.nio.ByteBuffer
 
-namespace SambaClient {
+class ByteBufferPool {
+    private val bufferPool: Pools.Pool<ByteBuffer> = SynchronizedPool(16)
 
-struct CredentialTuple emptyTuple_;
+    fun obtainBuffer(): ByteBuffer {
+        return bufferPool.acquire() ?: ByteBuffer.allocateDirect(BUFFER_CAPACITY)
+    }
 
-struct CredentialTuple CredentialCache::get(const std::string &key) const {
-  if (credentialMap_.find(key) != credentialMap_.end()) {
-    return credentialMap_.at(key);
-  } else {
-    return emptyTuple_;
-  }
-}
+    fun recycleBuffer(buffer: ByteBuffer) {
+        buffer.clear()
+        bufferPool.release(buffer)
+    }
 
-void CredentialCache::put(const char *key, const struct CredentialTuple &tuple, bool overwrite) {
-  if (overwrite) {
-    credentialMap_[key] = tuple;
-  } else {
-    credentialMap_.emplace(key, tuple);
-  }
-}
-
-void CredentialCache::remove(const char *key_) {
-  std::string key(key_);
-  credentialMap_.erase(key);
-}
+    companion object {
+        private const val BUFFER_CAPACITY = 1024 * 1024
+    }
 }
