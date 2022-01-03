@@ -42,10 +42,12 @@ import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUri
 import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUriString
 import com.google.android.sambadocumentsprovider.cache.CacheResult
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
-import com.google.android.sambadocumentsprovider.document.*
+import com.google.android.sambadocumentsprovider.document.DocumentMetadata
+import com.google.android.sambadocumentsprovider.document.loadChildren
+import com.google.android.sambadocumentsprovider.document.loadDocument
+import com.google.android.sambadocumentsprovider.document.loadStat
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFacade
-import com.google.android.sambadocumentsprovider.nativefacade.openProxyFile
 import kotlinx.coroutines.*
 import java.io.FileNotFoundException
 import java.io.IOException

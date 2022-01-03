@@ -17,12 +17,9 @@
 package com.google.android.sambadocumentsprovider.nativefacade
 
 import android.annotation.TargetApi
-import kotlin.Throws
-import android.os.storage.StorageManager
-import com.google.android.sambadocumentsprovider.base.OnTaskFinishedCallback
 import android.os.ParcelFileDescriptor
+import android.os.storage.StorageManager
 import com.google.android.sambadocumentsprovider.provider.ByteBufferPool
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import java.io.IOException
 
@@ -33,21 +30,6 @@ interface SmbFacade : SmbClient {
         uri: String,
         mode: String,
         storageManager: StorageManager,
-        bufferPool: ByteBufferPool,
-        callback: OnTaskFinishedCallback<String>?
-    ): ParcelFileDescriptor
-}
-
-@TargetApi(26)
-@Throws(IOException::class)
-fun SmbFacade.openProxyFile(
-    uri: String,
-    mode: String,
-    storageManager: StorageManager,
-    bufferPool: ByteBufferPool
-): Pair<ParcelFileDescriptor, Deferred<Unit>> {
-    val deferred = CompletableDeferred<Unit>()
-    return openProxyFile(uri, mode, storageManager, bufferPool) { status, result, exception ->
-        deferred.complete(Unit)
-    } to deferred
+        bufferPool: ByteBufferPool
+    ): Pair<ParcelFileDescriptor, Deferred<Unit>>
 }
