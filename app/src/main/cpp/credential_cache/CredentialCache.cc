@@ -24,8 +24,10 @@ struct CredentialTuple emptyTuple_;
 
 struct CredentialTuple CredentialCache::get(const std::string &key) const {
   if (credentialMap_.find(key) != credentialMap_.end()) {
+    LOGV("FINDME", "Credential found for %s", key.c_str());
     return credentialMap_.at(key);
   } else {
+    LOGV("FINDME", "No credential found for %s", key.c_str());
     return emptyTuple_;
   }
 }

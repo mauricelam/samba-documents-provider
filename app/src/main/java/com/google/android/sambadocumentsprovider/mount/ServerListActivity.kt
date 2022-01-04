@@ -41,9 +41,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
+import com.google.android.sambadocumentsprovider.*
 import com.google.android.sambadocumentsprovider.R
-import com.google.android.sambadocumentsprovider.SambaProviderApplication
-import com.google.android.sambadocumentsprovider.ShareManager
+import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUriString
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 
@@ -53,14 +53,14 @@ class ServerListActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        shareManager = SambaProviderApplication.getServerManager(this)
+        shareManager = Components.shareManager
         val serverList = MdnsManager.discover(this, "_smb._tcp")
             .onEach { Log.d("FINDME", "Found servers: $it") }
             .catch { e -> Log.e("FINDME", "Error in server list", e) }
         setContent {
             MaterialTheme {
                 Scaffold(
-                    topBar = { TopAppBar(title = { Text(title.toString()) }) },
+                    topBar = { AppBar() },
                     floatingActionButton = {
                         FloatingActionButton(onClick = { addServerActivity(null) }) {
                             Icon(Icons.Filled.Add, getString(R.string.add))
@@ -74,8 +74,19 @@ class ServerListActivity : AppCompatActivity() {
         }
     }
 
+    @Composable
+    private fun AppBar() {
+        TopAppBar(title = { Text(title.toString()) },
+            navigationIcon = { BackButton() },
+            actions = {
+                OverflowMenu {
+                    LicenseMenuItem()
+                }
+            })
+    }
+
     private fun getMountedServers(): StateFlow<List<String>> {
-        return callbackFlow<List<String>> {
+        return callbackFlow {
             val listener: () -> Unit = { trySend(shareManager.getShares()) }
             shareManager.addListener(listener)
 
@@ -85,8 +96,13 @@ class ServerListActivity : AppCompatActivity() {
 
     private fun addServerActivity(serviceInfo: NsdServiceInfo?) {
         startActivity(Intent(this, MountServerActivity::class.java).apply {
-            putExtra("serviceInfo", serviceInfo)
+            serviceInfo?.let { info -> putExtra("serverUri", toUriString(info)) }
         })
+//        startActivity(Intent(this, AuthActivity::class.java).apply {
+//            serviceInfo?.let { info ->
+//                putExtra("shareUri", "smb://${info.serviceName}.local/PHD")
+//            }
+//        })
     }
 
     @OptIn(ExperimentalMaterialApi::class)
@@ -110,18 +126,16 @@ class ServerListActivity : AppCompatActivity() {
                 }
             }
             items(savedServerListState) { serverName ->
-                if (!serverName.endsWith("IPC$")) {
-                    ListItem(
-                        modifier = Modifier.clickable { viewMountedDriveActivity(serverName) },
-                        icon = { Icon(Icons.Filled.Favorite, "") },
-                        trailing = {
-                            IconButton(onClick = { shareManager.unmountServer(serverName) }) {
-                                Icon(Icons.Filled.Eject, "Eject")
-                            }
+                ListItem(
+                    modifier = Modifier.clickable { viewMountedDriveActivity(serverName) },
+                    icon = { Icon(Icons.Filled.Favorite, "") },
+                    trailing = {
+                        IconButton(onClick = { shareManager.unmountServer(serverName) }) {
+                            Icon(Icons.Filled.Eject, "Eject")
                         }
-                    ) {
-                        Text(text = serverName)
                     }
+                ) {
+                    Text(text = serverName)
                 }
             }
         }

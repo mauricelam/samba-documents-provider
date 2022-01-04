@@ -20,7 +20,6 @@ import android.app.ProgressDialog
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Uri
-import android.net.nsd.NsdServiceInfo
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.util.Log
@@ -29,19 +28,19 @@ import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.*
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.google.android.sambadocumentsprovider.*
@@ -49,35 +48,29 @@ import com.google.android.sambadocumentsprovider.R
 import com.google.android.sambadocumentsprovider.base.AuthFailedException
 import com.google.android.sambadocumentsprovider.base.DocumentIdHelper
 import com.google.android.sambadocumentsprovider.browsing.NetworkBrowser
-import com.google.android.sambadocumentsprovider.cache.DocumentCache
 import com.google.android.sambadocumentsprovider.document.DocumentMetadata
-import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
 import com.google.android.sambadocumentsprovider.provider.SambaDocumentsProvider
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 
 class MountServerActivity : AppCompatActivity() {
-    private lateinit var cache: DocumentCache
-    private lateinit var shareManager: ShareManager
-    private lateinit var smbClient: SmbClient
+    private val cache by lazy { Components.documentCache }
+    private val shareManager by lazy { Components.shareManager }
+    private val smbClient by lazy { Components.sambaClient }
+    private val networkBrowser by lazy { NetworkBrowser(smbClient) }
 
     private lateinit var connectivityManager: ConnectivityManager
 
-    private val serviceInfo: NsdServiceInfo? by lazy { intent.getParcelableExtra("serviceInfo") }
-
-    private data class UiState(
-        val serverUriState: MutableState<String>,
-        val domainState: MutableState<String>,
-        val usernameState: MutableState<String>,
-        val passwordState: MutableState<String>,
-        val sharePathState: MutableState<String>,
-    ) {
-        var serverUri by serverUriState
-        var domain by domainState
-        var username by usernameState
-        var password by passwordState
-        var sharePath by sharePathState
+    private interface UiState {
+        var serverUri: String
+        var domain: String
+        var needsAuth: Boolean
+        var username: String
+        var password: String
+        var sharePath: String
+        val availableShares: MutableList<String>
 
         fun clear() {
+            needsAuth = false
             domain = ""
             username = ""
             password = ""
@@ -89,20 +82,31 @@ class MountServerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        connectivityManager = getSystemService(ConnectivityManager::class.java)
+
         setContent {
-            val uiState = UiState(
-                serverUriState = rememberSaveable {
-                    mutableStateOf(
-                        serviceInfo?.let { info ->
-                            val port = info.port.takeIf { it != 445 }?.let { ":$it" } ?: ""
-                            "smb://${info.serviceName}.local${port}"
-                        } ?: ""
-                    )
-                },
-                domainState = rememberSaveable { mutableStateOf("") },
-                usernameState = rememberSaveable { mutableStateOf("") },
-                passwordState = rememberSaveable { mutableStateOf("") },
-                sharePathState = rememberSaveable { mutableStateOf("") })
+            val coroutineScope = rememberCoroutineScope()
+            val uiState = object : UiState {
+                override var serverUri by rememberSaveable {
+                    mutableStateOf(intent.getStringExtra("serverUri") ?: "")
+                }
+                override var domain by rememberSaveable { mutableStateOf("") }
+                override var username by rememberSaveable { mutableStateOf("") }
+                override var password by rememberSaveable { mutableStateOf("") }
+                override var sharePath by rememberSaveable { mutableStateOf("") }
+                override var needsAuth by rememberSaveable { mutableStateOf(false) }
+                override val availableShares = remember {
+                    mutableStateListOf<String>().also {
+                        if (serverUri.isNotEmpty()) {
+                            val uiState = this
+                            coroutineScope.launch {
+                                loadAvailableShares(uiState)
+                            }
+                        }
+                    }
+                }
+            }
+            val focusManager = LocalFocusManager.current
 
             MaterialTheme {
                 Scaffold(
@@ -118,54 +122,53 @@ class MountServerActivity : AppCompatActivity() {
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                     ) {
                         TextField(
-                            uiState.serverUri, { uiState.serverUri = it },
+                            uiState::serverUri,
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("URI") },
-                            placeholder = { Text("smb://myserver.local") })
-                        TextField(
-                            uiState.domain, { uiState.domain = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Domain") })
-                        TextField(
-                            uiState.username, { uiState.username = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("Username") })
-                        TextField(
-                            uiState.password, { uiState.password = it },
-                            label = { Text("Password") },
-                            visualTransformation = PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onKeyEvent { keyEvent ->
-                                    if (keyEvent.type == KeyEventType.KeyUp
-                                        && keyEvent.key == Key.Enter
-                                    ) {
-                                        tryMount(uiState)
-                                        true
-                                    } else {
-                                        false
-                                    }
-                                })
+                            placeholder = { Text("smb://myserver.local") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions {
+                                coroutineScope.launch {
+                                    loadAvailableShares(uiState)
+                                    // Add delay so UI changes are propagated before moving focus
+                                    delay(1)
+                                    focusManager.moveFocus(FocusDirection.Next)
+                                }
+                            }
+                        )
+                        if (uiState.needsAuth) {
+                            TextField(
+                                uiState::domain,
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                label = { Text("Domain") })
+                            TextField(
+                                uiState::username,
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                label = { Text("Username") })
+                            PasswordField(
+                                uiState::password,
+                                label = { Text("Password") },
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                         ShareSelector(uiState)
                     }
                 }
             }
         }
-
-        cache = SambaProviderApplication.getDocumentCache(this)
-        shareManager = SambaProviderApplication.getServerManager(this)
-        smbClient = SambaProviderApplication.getSambaClient(this)
-        connectivityManager = getSystemService(ConnectivityManager::class.java)
     }
 
     private fun tryMount(uiState: UiState) {
         if (connectivityManager.activeNetworkInfo?.isConnected != true) {
             return showMessage(R.string.no_active_network)
         }
-        val host = parseServerHost(uiState.serverUri)
-        val share = uiState.sharePath
-        val metadata = DocumentMetadata.createShare(host, share)
+        val metadata = DocumentMetadata.createShare(
+            parseServerHost(uiState.serverUri),
+            uiState.sharePath
+        )
         if (shareManager.isShareMounted(metadata.uri.toString())) {
             return showMessage(R.string.share_already_mounted)
         }
@@ -174,15 +177,7 @@ class MountServerActivity : AppCompatActivity() {
             ProgressDialog.show(this, null, getString(R.string.mounting_share), true)
         lifecycleScope.launch {
             try {
-                mountServer(
-                    metadata,
-                    uiState.domain,
-                    uiState.username,
-                    uiState.password,
-                    smbClient,
-                    cache,
-                    shareManager
-                )
+                mountServer(metadata, uiState.domain, uiState.username, uiState.password)
                 uiState.clear()
                 launchFileManager(metadata)
                 showMessage(R.string.share_mounted)
@@ -193,46 +188,80 @@ class MountServerActivity : AppCompatActivity() {
             }
             dialog.dismiss()
         }
-//        mTaskManager.runTask(metadata.uri, task)
+//        taskManager.runTask(metadata.uri, task)
+    }
+
+    private suspend fun mountServer(
+        metadata: DocumentMetadata,
+        domain: String,
+        username: String,
+        password: String
+    ) {
+        try {
+            withContext(Dispatchers.IO) {
+                shareManager.addServer(
+                    metadata.uri.toString(), domain, username, password,
+                    checker = { metadata.loadChildren(smbClient) }, mount = true
+                )
+            }
+            for (m in metadata.children!!.values) {
+                cache.put(m)
+            }
+        } catch (e: CancellationException) {
+            // User cancelled the task, unmount it regardless of its result.
+            Log.w(TAG, "mountServer cancelled", e)
+            shareManager.unmountServer(metadata.uri.toString())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to mount share.", e)
+            throw e
+        }
+    }
+
+    private suspend fun loadAvailableShares(state: UiState) {
+        try {
+            state.availableShares.clear()
+            shareManager.addTemporaryCredentials(
+                "${state.serverUri}/IPC$",
+                state.domain,
+                state.username,
+                state.password,
+            )
+            networkBrowser.getSharesAsync(state.serverUri).forEach { (server, shares) ->
+                android.util.Log.d("FINDME", "Server=$server, Share=$shares")
+                state.availableShares.addAll(shares)
+            }
+        } catch (e: AuthFailedException) {
+            if (!state.needsAuth) {
+                state.needsAuth = true
+            } else {
+                // Auth still fails!
+                showMessage("Authentication failed. Check your username and password")
+            }
+        } catch (e: Exception) {
+            Log.e("FINDME", "Error loading dropdown", e)
+        }
     }
 
     @OptIn(ExperimentalMaterialApi::class)
     @Composable
-    private fun ShareSelector(
-        uiState: UiState,
-    ) {
+    private fun ShareSelector(state: UiState) {
         var expanded by remember { mutableStateOf(false) }
         var loading by remember { mutableStateOf(false) }
-        val browser = NetworkBrowser(smbClient)
-        val availableShares = remember { mutableStateListOf<String>() }
         val coroutineScope = rememberCoroutineScope()
 
         ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = {
             expanded = !expanded
-            coroutineScope.launch {
-                loading = true
-                try {
-                    availableShares.clear()
-                    shareManager.addTemporaryCredentials(
-                        uiState.serverUri + "/IPC$",
-                        uiState.domain,
-                        uiState.username,
-                        uiState.password,
-                    )
-                    browser.getSharesAsync(uiState.serverUri).forEach { (server, shares) ->
-                        android.util.Log.d("FINDME", "Server=$server, Share=$shares")
-                        availableShares.addAll(shares)
-                    }
-                } catch (e: Exception) {
-                    Log.e("FINDME", "Error loading dropdown", e)
-                } finally {
+            if (expanded) {
+                coroutineScope.launch {
+                    loading = true
+                    catchExceptions { loadAvailableShares(state) }
                     loading = false
                 }
             }
         }) {
             OutlinedTextField(
-                value = uiState.sharePath,
-                onValueChange = { uiState.sharePath = it },
+                value = state.sharePath,
+                onValueChange = { state.sharePath = it },
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 colors = ExposedDropdownMenuDefaults.textFieldColors(),
                 label = { Text("Share") },
@@ -240,12 +269,14 @@ class MountServerActivity : AppCompatActivity() {
             )
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 if (loading) {
-                    CircularProgressIndicator()
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    }
                 } else {
-                    availableShares.forEach { share ->
+                    state.availableShares.forEach { share ->
                         DropdownMenuItem(
                             onClick = {
-                                uiState.sharePath = share
+                                state.sharePath = share
                                 expanded = false
                             }
                         ) {
@@ -259,36 +290,21 @@ class MountServerActivity : AppCompatActivity() {
 
     @Composable
     private fun AppBar() {
-        var showMenu by remember { mutableStateOf(false) }
         TopAppBar(title = { Text(title.toString()) },
-            navigationIcon = {
-                IconButton(onClick = { finish() }) {
-                    Icon(Icons.Default.ArrowBack, "Back")
-                }
-            },
+            navigationIcon = { BackButton() },
             actions = {
-                IconButton(onClick = { showMenu = !showMenu }) {
-                    Icon(Icons.Default.MoreVert, "More")
-                }
-                DropdownMenu(
-                    expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
-                ) {
-                    DropdownMenuItem(onClick = { showLicense() }) {
-                        Text(text = "License")
-                    }
+                OverflowMenu {
+                    LicenseMenuItem()
                 }
             })
     }
 
-    private fun showLicense() {
-        startActivity(Intent(Intent.ACTION_VIEW).apply {
-            data = Uri.parse("https://www.gnu.org/licenses/gpl-3.0-standalone.html")
-        })
-    }
-
     private fun showMessage(@StringRes id: Int) {
         Toast.makeText(this, id, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showMessage(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
 
     private fun launchFileManager(metadata: DocumentMetadata) {

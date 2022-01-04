@@ -64,19 +64,18 @@ class SambaDocumentsProvider : DocumentsProvider() {
 
     override fun onCreate(): Boolean {
         providerContext = context!!
-        SambaProviderApplication.init(providerContext)
-        smbFacade = SambaProviderApplication.getSambaClient(providerContext)
-        cache = SambaProviderApplication.getDocumentCache(providerContext)
-        taskManager = SambaProviderApplication.getTaskManager(providerContext)
+        Components.initialize(providerContext)
+        smbFacade = Components.sambaClient
+        cache = Components.documentCache
+        taskManager = Components.taskManager
         bufferPool = ByteBufferPool()
-        shareManager = SambaProviderApplication.getServerManager(providerContext)
+        shareManager = Components.shareManager
         shareManager.addListener {
             val rootsUri = DocumentsContract.buildRootsUri(AUTHORITY)
             val resolver = providerContext.contentResolver
             resolver.notifyChange(rootsUri, null, false)
         }
-        storageManager =
-            providerContext.getSystemService(Context.STORAGE_SERVICE) as StorageManager
+        storageManager = providerContext.getSystemService(StorageManager::class.java)
         return true
     }
 

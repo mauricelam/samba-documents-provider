@@ -17,6 +17,7 @@
 package com.google.android.sambadocumentsprovider.base
 
 import android.net.Uri
+import android.net.nsd.NsdServiceInfo
 import com.google.android.sambadocumentsprovider.document.DocumentMetadata
 import com.google.android.sambadocumentsprovider.BuildConfig
 import com.google.android.sambadocumentsprovider.base.DocumentIdHelper
@@ -42,4 +43,9 @@ object DocumentIdHelper {
 
     @JvmStatic
     fun toUriString(documentId: String): String = documentId
+
+    fun toUriString(serviceInfo: NsdServiceInfo): String {
+        val port = serviceInfo.port.takeUnless { it == 445 }?.let { ":$it" } ?: ""
+        return "smb://${serviceInfo.serviceName}.local${port}"
+    }
 }
