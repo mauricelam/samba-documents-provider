@@ -162,6 +162,7 @@ class MountServerActivity : AppCompatActivity() {
     }
 
     private fun tryMount(uiState: UiState) {
+        check(uiState.sharePath.isNotEmpty()) { "Share path must not be empty" }
         if (connectivityManager.activeNetworkInfo?.isConnected != true) {
             return showMessage(R.string.no_active_network)
         }
@@ -221,7 +222,7 @@ class MountServerActivity : AppCompatActivity() {
         try {
             state.availableShares.clear()
             shareManager.addTemporaryCredentials(
-                "${state.serverUri}/IPC$",
+                "smb://${parseServerHost(state.serverUri)}/IPC$",
                 state.domain,
                 state.username,
                 state.password,
@@ -239,50 +240,17 @@ class MountServerActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             Log.e("FINDME", "Error loading dropdown", e)
+            showMessage(e.message ?: "Unknown error loading dropdown")
         }
     }
 
     @OptIn(ExperimentalMaterialApi::class)
     @Composable
     private fun ShareSelector(state: UiState) {
-        var expanded by remember { mutableStateOf(false) }
-        var loading by remember { mutableStateOf(false) }
-        val coroutineScope = rememberCoroutineScope()
-
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = {
-            expanded = !expanded
-            if (expanded) {
-                coroutineScope.launch {
-                    loading = true
-                    catchExceptions { loadAvailableShares(state) }
-                    loading = false
-                }
-            }
-        }) {
-            OutlinedTextField(
-                value = state.sharePath,
-                onValueChange = { state.sharePath = it },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                colors = ExposedDropdownMenuDefaults.textFieldColors(),
-                label = { Text("Share") },
-                readOnly = true
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                if (loading) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                } else {
-                    state.availableShares.forEach { share ->
-                        DropdownMenuItem(
-                            onClick = {
-                                state.sharePath = share
-                                expanded = false
-                            }
-                        ) {
-                            Text(share)
-                        }
-                    }
+        DropdownSelector(state::sharePath, loadDropdown = { loadAvailableShares(state) }) {
+            state.availableShares.forEach { share ->
+                DropdownMenuItem(onClick = { state.sharePath = share }) {
+                    Text(share)
                 }
             }
         }
@@ -336,6 +304,7 @@ class MountServerActivity : AppCompatActivity() {
             val smbUri = Uri.parse(path)
             val host = smbUri.authority
             if (host.isNullOrEmpty()) return null
+            check(smbUri.pathSegments.size == 0) { "SMB URI should not have path segments" }
             return host
         }
     }

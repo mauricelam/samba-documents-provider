@@ -22,6 +22,10 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,12 +34,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import kotlinx.coroutines.launch
 import java.lang.UnsupportedOperationException
 import kotlin.reflect.KMutableProperty0
 import kotlin.reflect.KProperty0
@@ -209,5 +215,74 @@ fun Activity.LicenseMenuItem() {
 fun Activity.BackButton() {
     IconButton(onClick = { finish() }) {
         Icon(Icons.Default.ArrowBack, "Back")
+    }
+}
+
+@OptIn(ExperimentalMaterialApi::class)
+@Composable
+fun DropdownSelector(
+    value: KMutableProperty0<String>,
+    loadDropdown: suspend () -> Unit,
+    contents: @Composable DropdownSelectorScope.() -> Unit
+) {
+    val expandedState = remember { mutableStateOf(false) }
+    var expanded by expandedState
+    var loading by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = {
+        expanded = !expanded
+        if (expanded) {
+            coroutineScope.launch {
+                loading = true
+                try {
+                    loadDropdown()
+                } finally {
+                    loading = false
+                }
+            }
+        }
+    }) {
+        OutlinedTextField(
+            value = value.get(),
+            onValueChange = { value.set(it) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = ExposedDropdownMenuDefaults.textFieldColors(),
+            label = { Text("Share") },
+            readOnly = true
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (loading) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                }
+            } else {
+                DropdownSelectorScope(expandedState).contents()
+            }
+        }
+    }
+}
+
+class DropdownSelectorScope(private val expanded: MutableState<Boolean>) {
+    @Composable
+    fun DropdownMenuItem(
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        enabled: Boolean = true,
+        contentPadding: PaddingValues = MenuDefaults.DropdownMenuItemContentPadding,
+        interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+        content: @Composable RowScope.() -> Unit
+    ) {
+        androidx.compose.material.DropdownMenuItem(
+            onClick = {
+                expanded.component2()(false)
+                onClick()
+            },
+            modifier = modifier,
+            enabled = enabled,
+            contentPadding = contentPadding,
+            interactionSource = interactionSource,
+            content = content
+        )
     }
 }
