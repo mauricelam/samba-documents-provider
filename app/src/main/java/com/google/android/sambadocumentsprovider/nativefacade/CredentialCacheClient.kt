@@ -22,13 +22,7 @@ import android.os.Message
 internal class CredentialCacheClient(looper: Looper, credentialCacheImpl: CredentialCache) :
     BaseClient(), CredentialCache {
 
-    override fun putCredential(
-        uri: String,
-        workgroup: String,
-        username: String,
-        password: String,
-        overwrite: Boolean
-    ) {
+    override fun putCredential(uri: String, workgroup: String, username: String, password: String) {
         MessageValues.obtain<String>().use { messageValues ->
             val msg = mHandler.obtainMessage(PUT_CREDENTIAL, messageValues)
             msg.data.apply {
@@ -49,23 +43,33 @@ internal class CredentialCacheClient(looper: Looper, credentialCacheImpl: Creden
         }
     }
 
+    override fun setTempMode(tempMode: Boolean) {
+        MessageValues.obtain<String>().use { messageValues ->
+            enqueue(mHandler.obtainMessage(SET_TEMP_MODE, messageValues).apply {
+                data.putBoolean("tempMode", tempMode)
+            })
+        }
+    }
+
     private class CredentialCacheHandler constructor(
         looper: Looper,
         private val mCredentialCacheImpl: CredentialCache
     ) : BaseHandler(looper) {
         public override fun processMessage(msg: Message) {
             val args = msg.peekData()
-            val uri = args.getString(URI_KEY)!!
             when (msg.what) {
                 PUT_CREDENTIAL -> {
+                    val uri = args.getString(URI_KEY)!!
                     val workgroup = args.getString(WORKGROUP_KEY)!!
                     val username = args.getString(USERNAME_KEY)!!
                     val password = args.getString(PASSWORD_KEY)!!
                     mCredentialCacheImpl.putCredential(uri, workgroup, username, password)
                 }
                 REMOVE_CREDENTIAL -> {
+                    val uri = args.getString(URI_KEY)!!
                     mCredentialCacheImpl.removeCredential(uri)
                 }
+                SET_TEMP_MODE -> mCredentialCacheImpl.setTempMode(args.getBoolean("tempMode"))
                 else -> throw UnsupportedOperationException("Unknown operation ${msg.what}")
             }
         }
@@ -74,6 +78,7 @@ internal class CredentialCacheClient(looper: Looper, credentialCacheImpl: Creden
     companion object {
         private const val PUT_CREDENTIAL = 1
         private const val REMOVE_CREDENTIAL = 2
+        private const val SET_TEMP_MODE = 3
         private const val URI_KEY = "URI"
         private const val WORKGROUP_KEY = "WORKGROUP"
         private const val USERNAME_KEY = "USERNAME"

@@ -30,11 +30,14 @@ struct CredentialTuple {
 
 class CredentialCache {
  public:
+  void setTempMode(const bool temp);
   struct CredentialTuple get(const std::string &key) const;
-  void put(const char *key, const struct CredentialTuple &tuple, const bool overwrite);
+  void put(const char *key, const struct CredentialTuple &tuple);
   void remove(const char *key);
  private:
   std::unordered_map<std::string, CredentialTuple> credentialMap_;
+  std::unordered_map<std::string, CredentialTuple> tempCredentialMap_;
+  bool tempMode_;
 };
 }
 

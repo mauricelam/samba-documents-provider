@@ -19,6 +19,7 @@ package com.google.android.sambadocumentsprovider.browsing
 import android.util.Log
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry
 import com.google.android.sambadocumentsprovider.browsing.broadcast.BroadcastBrowsingProvider
+import com.google.android.sambadocumentsprovider.nativefacade.CredentialCache
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
 import com.google.android.sambadocumentsprovider.nativefacade.SmbDir
 import kotlinx.coroutines.Dispatchers
@@ -27,20 +28,32 @@ import kotlinx.coroutines.withContext
 /**
  * This class discovers Samba servers and shares under them available on the local network.
  */
-class NetworkBrowser(client: SmbClient) {
-    private val masterProvider: NetworkBrowsingProvider
-    private val broadcastProvider: NetworkBrowsingProvider
-    private val smbClient: SmbClient
+class NetworkBrowser(private val smbClient: SmbClient, private val credentialCache: CredentialCache) {
+    private val masterProvider: NetworkBrowsingProvider = MasterBrowsingProvider(smbClient)
+    private val broadcastProvider: NetworkBrowsingProvider = BroadcastBrowsingProvider()
 
     /**
      * Asynchronously get available servers and shares under them.
      * A server name is mapped to the list of its children.
      */
-    suspend fun getSharesAsync(serverUri: String): List<String> {
+    suspend fun getShares(
+        serverUri: String,
+        domain: String,
+        username: String,
+        password: String
+    ): List<String> {
         return withContext(Dispatchers.IO) {
-            smbClient.openDir(serverUri).iterDir()
-                .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
-                .toList()
+            try {
+                credentialCache.setTempMode(true)
+                if (username.isNotEmpty() || password.isNotEmpty()) {
+                    credentialCache.putCredential("$serverUri/IPC$", domain, username, password)
+                }
+                smbClient.openDir(serverUri).iterDir()
+                    .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
+                    .toList()
+            } finally {
+                credentialCache.setTempMode(false)
+            }
         }
     }
 
@@ -61,11 +74,5 @@ class NetworkBrowser(client: SmbClient) {
 
     companion object {
         private const val TAG = "NetworkBrowser"
-    }
-
-    init {
-        masterProvider = MasterBrowsingProvider(client)
-        broadcastProvider = BroadcastBrowsingProvider()
-        smbClient = client
     }
 }

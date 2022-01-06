@@ -25,6 +25,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
+import com.google.android.sambadocumentsprovider.nativefacade.CredentialCache
 import com.google.android.sambadocumentsprovider.nativefacade.SambaMessageLooper
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFacade
 import kotlinx.coroutines.GlobalScope
@@ -36,9 +37,8 @@ object Components {
     val documentCache = DocumentCache()
     val taskManager = TaskManager()
     lateinit var sambaClient: SmbFacade
-        private set
     lateinit var shareManager: ShareManager
-        private set
+    lateinit var credentialsCache: CredentialCache
     private var initialized: Boolean = false
 
     fun initialize(context: Context) {
@@ -48,9 +48,9 @@ object Components {
         }
         initialized = true
         val looper = SambaMessageLooper()
-        val credentialCache = looper.credentialCache
+        credentialsCache = looper.credentialCache
         sambaClient = looper.client
-        shareManager = ShareManager(context, credentialCache)
+        shareManager = ShareManager(context, credentialsCache)
         initializeSambaConf(context)
         registerNetworkCallback(context)
     }

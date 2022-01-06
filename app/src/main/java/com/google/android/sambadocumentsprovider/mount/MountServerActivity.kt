@@ -55,7 +55,7 @@ class MountServerActivity : AppCompatActivity() {
     private val cache by lazy { Components.documentCache }
     private val shareManager by lazy { Components.shareManager }
     private val smbClient by lazy { Components.sambaClient }
-    private val networkBrowser by lazy { NetworkBrowser(smbClient) }
+    private val networkBrowser by lazy { NetworkBrowser(smbClient, Components.credentialsCache) }
 
     private lateinit var connectivityManager: ConnectivityManager
 
@@ -226,13 +226,7 @@ class MountServerActivity : AppCompatActivity() {
     private suspend fun loadAvailableShares(state: UiState) {
         try {
             state.availableShares.clear()
-            shareManager.addTemporaryCredentials(
-                "smb://${parseServerHost(state.serverUri)}/IPC$",
-                state.domain,
-                state.username,
-                state.password,
-            )
-            val shares = networkBrowser.getSharesAsync(state.serverUri)
+            val shares = networkBrowser.getShares(state.serverUri, state.domain, state.username, state.password)
             state.availableShares.addAll(shares)
         } catch (e: AuthFailedException) {
             if (!state.needsAuth) {

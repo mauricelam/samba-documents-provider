@@ -17,6 +17,7 @@
 package com.google.android.sambadocumentsprovider.nativefacade
 
 interface CredentialCache {
-    fun putCredential(uri: String, workgroup: String, username: String, password: String, overwrite: Boolean = true)
+    fun putCredential(uri: String, workgroup: String, username: String, password: String)
     fun removeCredential(uri: String)
+    fun setTempMode(tempMode: Boolean)
 }

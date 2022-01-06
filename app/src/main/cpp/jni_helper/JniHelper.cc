@@ -606,7 +606,7 @@ jlong Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredenti
 
 void Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentialCache_putCredential(
     JNIEnv *env, jobject instance, jlong pointer,
-    jstring uri_, jstring workgroup_, jstring username_, jstring password_, jboolean overwrite) {
+    jstring uri_, jstring workgroup_, jstring username_, jstring password_) {
 
   const char *uri;
   const char *workgroup;
@@ -633,7 +633,7 @@ void Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentia
     auto *cache = reinterpret_cast<SambaClient::CredentialCache *>(pointer);
     SambaClient::CredentialTuple tuple =
         {std::string(workgroup), std::string(username), std::string(password)};
-    cache->put(uri, tuple, overwrite);
+    cache->put(uri, tuple);
   }
 
   env->ReleaseStringUTFChars(password_, password);
@@ -655,6 +655,14 @@ void Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentia
       reinterpret_cast<SambaClient::CredentialCache *>(pointer);
 
   cache->remove(uri);
+}
+
+void Java_com_google_android_sambadocumentsprovider_nativefacade_NativeCredentialCache_setTempMode(
+        JNIEnv *env, jobject instance, jlong pointer, jboolean tempMode) {
+  SambaClient::CredentialCache *cache =
+          reinterpret_cast<SambaClient::CredentialCache *>(pointer);
+
+  cache->setTempMode(tempMode);
 }
 
 void Java_com_google_android_sambadocumentsprovider_SambaConfiguration_setEnv(

@@ -106,22 +106,6 @@ class ShareManager internal constructor(
         }
     }
 
-    /**
-     * Add temporary credentials to a server, for fetching available shares on a server. Typically
-     * in this case {@code uri} will be a URI without a specified share.
-     *
-     * Temporary credentials added through this method will be cleared once the app process is
-     * killed.
-     */
-    fun addTemporaryCredentials(
-        uri: String,
-        workgroup: String,
-        username: String,
-        password: String
-    ) {
-        checkServerCredentials(uri, workgroup, username, password, checker = {}, temporary = true)
-    }
-
     @Throws(IOException::class)
     private fun checkServerCredentials(
         uri: String,
@@ -129,16 +113,9 @@ class ShareManager internal constructor(
         username: String,
         password: String,
         checker: () -> Unit,
-        temporary: Boolean = false,
     ) {
         if (username.isNotEmpty() && password.isNotEmpty()) {
-            mCredentialCache.putCredential(
-                uri,
-                workgroup,
-                username,
-                password,
-                overwrite = !temporary
-            )
+            mCredentialCache.putCredential(uri, workgroup, username, password)
         }
         try {
             checker()

@@ -23,25 +23,28 @@ namespace SambaClient {
 struct CredentialTuple emptyTuple_;
 
 struct CredentialTuple CredentialCache::get(const std::string &key) const {
-  if (credentialMap_.find(key) != credentialMap_.end()) {
+  auto& map = tempMode_ ? tempCredentialMap_ : credentialMap_;
+  if (map.find(key) != map.end()) {
     LOGV("FINDME", "Credential found for %s", key.c_str());
-    return credentialMap_.at(key);
+    return map.at(key);
   } else {
     LOGV("FINDME", "No credential found for %s", key.c_str());
     return emptyTuple_;
   }
 }
 
-void CredentialCache::put(const char *key, const struct CredentialTuple &tuple, bool overwrite) {
-  if (overwrite) {
-    credentialMap_[key] = tuple;
-  } else {
-    credentialMap_.emplace(key, tuple);
-  }
+void CredentialCache::put(const char *key, const struct CredentialTuple &tuple) {
+  auto& map = tempMode_ ? tempCredentialMap_ : credentialMap_;
+  map[key] = tuple;
 }
 
 void CredentialCache::remove(const char *key_) {
+  auto& map = tempMode_ ? tempCredentialMap_ : credentialMap_;
   std::string key(key_);
-  credentialMap_.erase(key);
+  map.erase(key);
+}
+
+void CredentialCache::setTempMode(const bool temp) {
+  tempMode_ = temp;
 }
 }

@@ -34,8 +34,8 @@ class NativeCredentialCache implements CredentialCache {
   }
 
   @Override
-  public void putCredential(String uri, String workgroup, String username, String password, boolean overwrite) {
-    putCredential(mNativeHandler, uri, workgroup, username, password, overwrite);
+  public void putCredential(String uri, String workgroup, String username, String password) {
+    putCredential(mNativeHandler, uri, workgroup, username, password);
   }
 
   @Override
@@ -43,10 +43,17 @@ class NativeCredentialCache implements CredentialCache {
     removeCredential(mNativeHandler, uri);
   }
 
+  @Override
+  public void setTempMode(boolean tempMode) {
+    setTempMode(mNativeHandler, tempMode);
+  }
+
   private native long nativeInit();
 
   private native void putCredential(
-      long handler, String uri, String workgroup, String username, String password, boolean overwrite);
+      long handler, String uri, String workgroup, String username, String password);
 
   private native void removeCredential(long handler, String uri);
+
+  private native void setTempMode(long handler, boolean tempMode);
 }
