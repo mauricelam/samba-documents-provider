@@ -35,7 +35,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -99,9 +98,7 @@ class MountServerActivity : AppCompatActivity() {
                     mutableStateListOf<String>().also {
                         if (serverUri.isNotEmpty()) {
                             val uiState = this
-                            coroutineScope.launch {
-                                loadAvailableShares(uiState)
-                            }
+                            coroutineScope.launch { loadAvailableShares(uiState) }
                         }
                     }
                 }
@@ -154,7 +151,15 @@ class MountServerActivity : AppCompatActivity() {
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                        ShareSelector(uiState)
+                        DropdownSelector(
+                            uiState::sharePath,
+                            loadDropdown = { loadAvailableShares(uiState) }) {
+                            uiState.availableShares.forEach { share ->
+                                DropdownMenuItem(onClick = { uiState.sharePath = share }) {
+                                    Text(share)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -227,10 +232,8 @@ class MountServerActivity : AppCompatActivity() {
                 state.username,
                 state.password,
             )
-            networkBrowser.getSharesAsync(state.serverUri).forEach { (server, shares) ->
-                android.util.Log.d("FINDME", "Server=$server, Share=$shares")
-                state.availableShares.addAll(shares)
-            }
+            val shares = networkBrowser.getSharesAsync(state.serverUri)
+            state.availableShares.addAll(shares)
         } catch (e: AuthFailedException) {
             if (!state.needsAuth) {
                 state.needsAuth = true
@@ -241,18 +244,6 @@ class MountServerActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e("FINDME", "Error loading dropdown", e)
             showMessage(e.message ?: "Unknown error loading dropdown")
-        }
-    }
-
-    @OptIn(ExperimentalMaterialApi::class)
-    @Composable
-    private fun ShareSelector(state: UiState) {
-        DropdownSelector(state::sharePath, loadDropdown = { loadAvailableShares(state) }) {
-            state.availableShares.forEach { share ->
-                DropdownMenuItem(onClick = { state.sharePath = share }) {
-                    Text(share)
-                }
-            }
         }
     }
 
@@ -298,13 +289,15 @@ class MountServerActivity : AppCompatActivity() {
                 return null
             }
             val endCharacter = if (path.endsWith("\\")) path.length - 1 else path.length
-            return path.substring(2, endCharacter).split("\\\\")[0]
+            val segments = path.substring(2, endCharacter).split("\\\\")
+            check(segments.size == 1) { "SMB path should not specify share" }
+            return segments[0]
         } else {
             // Try SMB URI
             val smbUri = Uri.parse(path)
             val host = smbUri.authority
             if (host.isNullOrEmpty()) return null
-            check(smbUri.pathSegments.size == 0) { "SMB URI should not have path segments" }
+            check(smbUri.pathSegments.size == 0) { "SMB URI should not specify share" }
             return host
         }
     }

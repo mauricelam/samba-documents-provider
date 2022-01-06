@@ -275,7 +275,8 @@ class DropdownSelectorScope(private val expanded: MutableState<Boolean>) {
     ) {
         androidx.compose.material.DropdownMenuItem(
             onClick = {
-                expanded.component2()(false)
+                val (_, setExpanded) = expanded
+                setExpanded(false)
                 onClick()
             },
             modifier = modifier,
@@ -284,5 +285,19 @@ class DropdownSelectorScope(private val expanded: MutableState<Boolean>) {
             interactionSource = interactionSource,
             content = content
         )
+    }
+}
+
+fun <T> KMutableProperty0<T>.asMutableState(): MutableState<T> {
+    if (getDelegate() is MutableState<*>) {
+        return getDelegate() as MutableState<T>
+    }
+    return object: MutableState<T> {
+        override var value: T
+            get() = get()
+            set(value) { set(value) }
+
+        override fun component1(): T = value
+        override fun component2(): (T) -> Unit = { value = it }
     }
 }

@@ -16,16 +16,13 @@
  */
 package com.google.android.sambadocumentsprovider.browsing
 
-import android.net.Uri
 import android.util.Log
-import androidx.annotation.WorkerThread
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry
 import com.google.android.sambadocumentsprovider.browsing.broadcast.BroadcastBrowsingProvider
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
 import com.google.android.sambadocumentsprovider.nativefacade.SmbDir
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 /**
  * This class discovers Samba servers and shares under them available on the local network.
@@ -39,18 +36,12 @@ class NetworkBrowser(client: SmbClient) {
      * Asynchronously get available servers and shares under them.
      * A server name is mapped to the list of its children.
      */
-    suspend fun getSharesAsync(serverUri: String): Map<String, List<String>> {
+    suspend fun getSharesAsync(serverUri: String): List<String> {
         return withContext(Dispatchers.IO) {
-            mapOf(serverUri to getSharesForServer(serverUri))
+            smbClient.openDir(serverUri).iterDir()
+                .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
+                .toList()
         }
-    }
-
-    @WorkerThread
-    @Throws(IOException::class)
-    private fun getSharesForServer(serverUri: String): List<String> {
-        return smbClient.openDir(serverUri).iterDir()
-            .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
-            .toList()
     }
 
     private fun SmbDir.iterDir(): Sequence<DirectoryEntry> {
@@ -68,18 +59,7 @@ class NetworkBrowser(client: SmbClient) {
         }
     }
 
-    @Throws(BrowsingException::class)
-    private fun loadServers(): List<String> {
-        return try {
-            masterProvider.servers
-        } catch (e: BrowsingException) {
-            Log.e(TAG, "Master browsing failed", e)
-            null
-        }?.takeUnless { it.isEmpty() } ?: broadcastProvider.servers
-    }
-
     companion object {
-        private val SMB_BROWSING_URI = Uri.parse("smb://")
         private const val TAG = "NetworkBrowser"
     }
 

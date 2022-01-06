@@ -17,6 +17,7 @@
 package com.google.android.sambadocumentsprovider.provider
 
 import android.app.AuthenticationRequiredException
+import android.content.ContentResolver
 import android.content.Context
 import android.database.Cursor
 import android.database.MatrixCursor
@@ -61,6 +62,8 @@ class SambaDocumentsProvider : DocumentsProvider() {
     private lateinit var taskManager: TaskManager
     private lateinit var storageManager: StorageManager
     private lateinit var providerContext: Context
+    private val contentResolver
+        get() = providerContext.contentResolver
 
     override fun onCreate(): Boolean {
         providerContext = context!!
@@ -72,17 +75,17 @@ class SambaDocumentsProvider : DocumentsProvider() {
         shareManager = Components.shareManager
         shareManager.addListener {
             val rootsUri = DocumentsContract.buildRootsUri(AUTHORITY)
-            val resolver = providerContext.contentResolver
-            resolver.notifyChange(rootsUri, null, false)
+            contentResolver.notifyChange(rootsUri, null, 0)
         }
         storageManager = providerContext.getSystemService(StorageManager::class.java)
         return true
     }
 
     @Throws(FileNotFoundException::class)
-    override fun queryRoots(projection: Array<String>?): Cursor {
+    override fun queryRoots(proj: Array<String>?): Cursor {
+        // TODO: Add a virtual root for discovering local SMB shares
         if (BuildConfig.DEBUG) Log.d(TAG, "Querying roots.")
-        val projection = projection ?: DEFAULT_ROOT_PROJECTION
+        val projection = proj ?: DEFAULT_ROOT_PROJECTION
         val cursor = MatrixCursor(projection)
         for (uri in shareManager.getShares()) {
             if (!shareManager.isShareMounted(uri)) {
@@ -101,7 +104,9 @@ class SambaDocumentsProvider : DocumentsProvider() {
                         toRootId(metadata),
                         toDocumentId(parsedUri),
                         name,
-                        DocumentsContract.Root.FLAG_SUPPORTS_CREATE or DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD or DocumentsContract.Root.FLAG_SUPPORTS_EJECT,
+                        DocumentsContract.Root.FLAG_SUPPORTS_CREATE
+                                or DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD
+                                or DocumentsContract.Root.FLAG_SUPPORTS_EJECT,
                         R.drawable.ic_folder_shared
                     )
                 )
@@ -122,9 +127,9 @@ class SambaDocumentsProvider : DocumentsProvider() {
     }
 
     @Throws(FileNotFoundException::class)
-    override fun queryDocument(documentId: String, projection: Array<String>?): Cursor {
+    override fun queryDocument(documentId: String, proj: Array<String>?): Cursor {
         if (BuildConfig.DEBUG) Log.d(TAG, "Querying document: $documentId")
-        val projection = projection ?: DEFAULT_DOCUMENT_PROJECTION
+        val projection = proj ?: DEFAULT_DOCUMENT_PROJECTION
         val cursor = MatrixCursor(projection)
         val uri = toUri(documentId)
         try {
@@ -156,11 +161,11 @@ class SambaDocumentsProvider : DocumentsProvider() {
     @Throws(FileNotFoundException::class, AuthenticationRequiredException::class)
     override fun queryChildDocuments(
         documentId: String,
-        projection: Array<String>?,
+        proj: Array<String>?,
         sortOrder: String
     ): Cursor {
         if (BuildConfig.DEBUG) Log.d(TAG, "Querying children documents under $documentId")
-        val projection = projection ?: DEFAULT_DOCUMENT_PROJECTION
+        val projection = proj ?: DEFAULT_DOCUMENT_PROJECTION
         val uri = toUri(documentId)
         try {
             if (DocumentMetadata.isServerUri(uri)) {
@@ -289,7 +294,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             val isDir = DocumentsContract.Document.MIME_TYPE_DIR == mimeType
             val entry = DirectoryEntry(
                 if (isDir) DirectoryEntry.Type.DIR else DirectoryEntry.Type.FILE,
-                "",  // comment
+                comment = "",
                 displayName
             )
             val uri = DocumentMetadata.buildChildUri(parentUri, entry)
@@ -300,7 +305,11 @@ class SambaDocumentsProvider : DocumentsProvider() {
             }
 
             // Notify anyone who's listening on the parent folder.
-            providerContext.contentResolver.notifyChange(toNotifyUri(parentUri), null, false)
+            providerContext.contentResolver.notifyChange(
+                toNotifyUri(parentUri),
+                null,
+                ContentResolver.NOTIFY_INSERT
+            )
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
                     // It must be a file, and the file is truncated... Reset its cache.
@@ -334,7 +343,11 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 ?: throw UnsupportedOperationException("$displayName is not a valid name.")
             smbFacade.rename(uri.toString(), newUri.toString())
             revokeDocumentPermission(documentId)
-            providerContext.contentResolver.notifyChange(toNotifyUri(parentUri), null, false)
+            providerContext.contentResolver.notifyChange(
+                toNotifyUri(parentUri),
+                null,
+                ContentResolver.NOTIFY_UPDATE
+            )
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
                     val metadata = result.item
@@ -364,12 +377,20 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 deleteFile(metadata)
             }
             val notifyUri = toNotifyUri(DocumentMetadata.buildParentUri(uri))
-            providerContext.contentResolver.notifyChange(notifyUri, null, false)
+            providerContext.contentResolver.notifyChange(
+                notifyUri,
+                null,
+                ContentResolver.NOTIFY_DELETE
+            )
         } catch (e: FileNotFoundException) {
             Log.w(TAG, "$documentId is not found. No need to delete it.", e)
             cache.remove(uri)
             val notifyUri = toNotifyUri(DocumentMetadata.buildParentUri(uri))
-            providerContext.contentResolver.notifyChange(notifyUri, null, false)
+            providerContext.contentResolver.notifyChange(
+                notifyUri,
+                null,
+                ContentResolver.NOTIFY_DELETE
+            )
         } catch (e: IOException) {
             throw IllegalStateException(e)
         }
@@ -428,9 +449,16 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 .buildChildUri(targetParentUri, uri.lastPathSegment)
             smbFacade.rename(uri.toString(), targetUri.toString())
             revokeDocumentPermission(sourceDocumentId)
-            providerContext.contentResolver
-                .notifyChange(toNotifyUri(DocumentMetadata.buildParentUri(uri)), null, false)
-            providerContext.contentResolver.notifyChange(toNotifyUri(targetParentUri), null, false)
+            providerContext.contentResolver.notifyChange(
+                toNotifyUri(DocumentMetadata.buildParentUri(uri)),
+                null,
+                ContentResolver.NOTIFY_UPDATE
+            )
+            providerContext.contentResolver.notifyChange(
+                toNotifyUri(targetParentUri),
+                null,
+                ContentResolver.NOTIFY_UPDATE
+            )
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
                     val metadata = result.item
@@ -520,7 +548,11 @@ class SambaDocumentsProvider : DocumentsProvider() {
             }
             // Notify write change
             val parentUri = DocumentMetadata.buildParentUri(uri)
-            providerContext.contentResolver.notifyChange(toNotifyUri(parentUri), null, false)
+            providerContext.contentResolver.notifyChange(
+                toNotifyUri(parentUri),
+                null,
+                ContentResolver.NOTIFY_UPDATE
+            )
         }
     }
 

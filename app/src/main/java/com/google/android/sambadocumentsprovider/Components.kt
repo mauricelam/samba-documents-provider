@@ -24,7 +24,6 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
-import com.google.android.sambadocumentsprovider.browsing.NetworkBrowser
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
 import com.google.android.sambadocumentsprovider.nativefacade.SambaMessageLooper
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFacade
@@ -40,8 +39,6 @@ object Components {
         private set
     lateinit var shareManager: ShareManager
         private set
-    lateinit var networkBrowser: NetworkBrowser
-        private set
     private var initialized: Boolean = false
 
     fun initialize(context: Context) {
@@ -54,7 +51,6 @@ object Components {
         val credentialCache = looper.credentialCache
         sambaClient = looper.client
         shareManager = ShareManager(context, credentialCache)
-        networkBrowser = NetworkBrowser(sambaClient)
         initializeSambaConf(context)
         registerNetworkCallback(context)
     }
