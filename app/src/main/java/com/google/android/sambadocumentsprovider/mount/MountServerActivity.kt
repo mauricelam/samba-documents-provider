@@ -16,7 +16,6 @@
  */
 package com.google.android.sambadocumentsprovider.mount
 
-import android.app.ProgressDialog
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Uri
@@ -34,7 +33,7 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -68,6 +67,7 @@ class MountServerActivity : AppCompatActivity() {
         var password: String
         var sharePath: String
         val availableShares: MutableList<String>
+        var mounting: Boolean
 
         fun clear() {
             needsAuth = false
@@ -75,27 +75,26 @@ class MountServerActivity : AppCompatActivity() {
             username = ""
             password = ""
             sharePath = ""
+            mounting = false
         }
     }
 
     @OptIn(ExperimentalComposeUiApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         connectivityManager = getSystemService(ConnectivityManager::class.java)
 
         setContent {
-            val coroutineScope = rememberCoroutineScope()
             val uiState = object : UiState {
-                override var serverUri by rememberSaveable { mutableStateOf("") }
-                override var domain by rememberSaveable { mutableStateOf("") }
-                override var username by rememberSaveable { mutableStateOf("") }
-                override var password by rememberSaveable { mutableStateOf("") }
-                override var sharePath by rememberSaveable { mutableStateOf("") }
-                override var needsAuth by rememberSaveable { mutableStateOf(false) }
+                override var serverUri by composeState("")
+                override var domain by composeState("")
+                override var username by composeState("")
+                override var password by composeState("")
+                override var sharePath by composeState("")
+                override var needsAuth by composeState(false)
+                override var mounting by composeState(false, saveable = false)
                 override val availableShares = remember { mutableStateListOf<String>() }
             }
-            val focusManager = LocalFocusManager.current
 
             intent.getStringExtra("serverUri").takeUnless { it.isNullOrEmpty() }?.let { shareUri ->
                 val (host, share) = parseShareUri(shareUri) ?: return@let
@@ -119,8 +118,10 @@ class MountServerActivity : AppCompatActivity() {
                 Scaffold(
                     topBar = { AppBar() },
                     floatingActionButton = {
-                        FloatingActionButton(onClick = { tryMount(uiState) }) {
-                            Icon(Icons.Filled.Done, "Done")
+                        if (!uiState.mounting) {
+                            FloatingActionButton(onClick = { tryMount(uiState) }) {
+                                Icon(Icons.Filled.Done, "Done")
+                            }
                         }
                     }) {
                     Column(
@@ -128,49 +129,67 @@ class MountServerActivity : AppCompatActivity() {
                             .fillMaxSize()
                             .padding(horizontal = 8.dp, vertical = 8.dp)
                     ) {
-                        TextField(
-                            uiState::serverUri,
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("URI") },
-                            placeholder = { Text("smb://myserver.local") },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions {
-                                coroutineScope.launch {
-                                    loadAvailableShares(uiState)
-                                    // Add delay so UI changes are propagated before moving focus
-                                    delay(1)
-                                    focusManager.moveFocus(FocusDirection.Next)
-                                }
+                        if (uiState.mounting) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Row { CircularProgressIndicator(Modifier.padding(8.dp)) }
+                                Row { Text(getString(R.string.mounting_share)) }
                             }
-                        )
-                        if (uiState.needsAuth) {
-                            TextField(
-                                uiState::domain,
-                                modifier = Modifier.fillMaxWidth(),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                label = { Text("Domain") })
-                            TextField(
-                                uiState::username,
-                                modifier = Modifier.fillMaxWidth(),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                label = { Text("Username") })
-                            PasswordField(
-                                uiState::password,
-                                label = { Text("Password") },
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                        DropdownSelector(
-                            uiState::sharePath,
-                            loadDropdown = { loadAvailableShares(uiState) }) {
-                            uiState.availableShares.forEach { share ->
-                                DropdownMenuItem(onClick = { uiState.sharePath = share }) {
-                                    Text(share)
-                                }
-                            }
+                        } else {
+                            ServerFields(uiState)
                         }
                     }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ServerFields(uiState: UiState) {
+        val coroutineScope = rememberCoroutineScope()
+        val focusManager = LocalFocusManager.current
+        TextField(
+            uiState::serverUri,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("URI") },
+            placeholder = { Text("smb://myserver.local") },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+            keyboardActions = KeyboardActions {
+                coroutineScope.launch {
+                    loadAvailableShares(uiState)
+                    // Add delay so UI changes are propagated before moving focus
+                    delay(1)
+                    focusManager.moveFocus(FocusDirection.Next)
+                }
+            }
+        )
+        if (uiState.needsAuth) {
+            TextField(
+                uiState::domain,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                label = { Text("Domain") })
+            TextField(
+                uiState::username,
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                label = { Text("Username") })
+            PasswordField(
+                uiState::password,
+                label = { Text("Password") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        DropdownSelector(
+            uiState::sharePath,
+            loadDropdown = { loadAvailableShares(uiState) }) {
+            uiState.availableShares.forEach { share ->
+                DropdownMenuItem(onClick = { uiState.sharePath = share }) {
+                    Text(share)
                 }
             }
         }
@@ -185,8 +204,7 @@ class MountServerActivity : AppCompatActivity() {
         check(share == null) { "Share must not be specified in server URI" }
         val metadata = DocumentMetadata.createShare(host, uiState.sharePath)
         cache.put(metadata)
-        val dialog =
-            ProgressDialog.show(this, null, getString(R.string.mounting_share), true)
+        uiState.mounting = true
         lifecycleScope.launch {
             try {
                 mountServer(metadata, uiState.domain, uiState.username, uiState.password)
@@ -198,7 +216,7 @@ class MountServerActivity : AppCompatActivity() {
                 cache.remove(metadata.uri)
                 showMessage(if (e is AuthFailedException) R.string.credential_error else R.string.failed_mounting)
             }
-            dialog.dismiss()
+            uiState.mounting = false
         }
 //        taskManager.runTask(metadata.uri, task)
     }

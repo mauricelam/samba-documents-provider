@@ -24,7 +24,9 @@ import android.provider.DocumentsContract
 import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +51,7 @@ import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUriStri
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 
+@ExperimentalFoundationApi
 class ServerListActivity : AppCompatActivity() {
 
     private lateinit var shareManager: ShareManager
@@ -131,11 +134,9 @@ class ServerListActivity : AppCompatActivity() {
             }
             items(savedServerListState) { serverUri ->
                 ListItem(
-                    modifier = Modifier
-                        .clickable { viewMountedDriveActivity(serverUri) }
-                        .pointerInput(Unit) {
-                            detectTapGestures(onLongPress = { addServerActivity(serverUri) })
-                        },
+                    modifier = Modifier.combinedClickable(
+                        onLongClick = { addServerActivity(serverUri) },
+                        onClick = { viewMountedDriveActivity(serverUri) }),
                     icon = { Icon(Icons.Filled.Favorite, "") },
                     trailing = {
                         IconButton(onClick = { shareManager.unmountServer(serverUri) }) {

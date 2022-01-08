@@ -34,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
@@ -52,6 +53,15 @@ inline fun <T> catchExceptions(block: () -> T): T? {
     } catch (e: Exception) {
         Log.w("SambaDocumentsProvider", "Caught exception", e)
         null
+    }
+}
+
+@Composable
+fun <T> composeState(initialValue: T, saveable: Boolean = true): MutableState<T> {
+    return if (saveable) {
+        rememberSaveable { mutableStateOf(initialValue) }
+    } else {
+        remember { mutableStateOf(initialValue) }
     }
 }
 
@@ -292,10 +302,12 @@ fun <T> KMutableProperty0<T>.asMutableState(): MutableState<T> {
     if (getDelegate() is MutableState<*>) {
         return getDelegate() as MutableState<T>
     }
-    return object: MutableState<T> {
+    return object : MutableState<T> {
         override var value: T
             get() = get()
-            set(value) { set(value) }
+            set(value) {
+                set(value)
+            }
 
         override fun component1(): T = value
         override fun component2(): (T) -> Unit = { value = it }
