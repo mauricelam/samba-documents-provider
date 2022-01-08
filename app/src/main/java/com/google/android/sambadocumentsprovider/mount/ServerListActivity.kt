@@ -27,7 +27,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,7 +42,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.lifecycleScope
 import com.google.android.sambadocumentsprovider.*
 import com.google.android.sambadocumentsprovider.R
@@ -52,6 +50,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 
 @ExperimentalFoundationApi
+@OptIn(ExperimentalMaterialApi::class)
 class ServerListActivity : AppCompatActivity() {
 
     private lateinit var shareManager: ShareManager
@@ -59,7 +58,7 @@ class ServerListActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         shareManager = Components.shareManager
-        val serverList = MdnsManager.discover(this, "_smb._tcp")
+        val serverList = MdnsManager.discover(this, SMB_MDNS_SERVICE_NAME)
             .onEach { Log.d(TAG, "Found servers: $it") }
             .catch { e -> Log.e(TAG, "Error in server list", e) }
         setContent {
@@ -105,14 +104,8 @@ class ServerListActivity : AppCompatActivity() {
                 putExtra("serverUri", serverUri)
             }
         })
-//        startActivity(Intent(this, AuthActivity::class.java).apply {
-//            serviceInfo?.let { info ->
-//                putExtra("shareUri", "smb://${info.serviceName}.local/PHD")
-//            }
-//        })
     }
 
-    @OptIn(ExperimentalMaterialApi::class)
     @Composable
     fun ServerList(
         serverList: Flow<List<NsdServiceInfo>>,
@@ -165,5 +158,6 @@ class ServerListActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ServerListActivity"
+        private const val SMB_MDNS_SERVICE_NAME = "_smb._tcp"
     }
 }

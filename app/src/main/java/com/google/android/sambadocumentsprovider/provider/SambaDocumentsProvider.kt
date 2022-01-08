@@ -44,9 +44,6 @@ import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUriStri
 import com.google.android.sambadocumentsprovider.cache.CacheResult
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
 import com.google.android.sambadocumentsprovider.document.DocumentMetadata
-import com.google.android.sambadocumentsprovider.document.loadChildren
-import com.google.android.sambadocumentsprovider.document.loadDocument
-import com.google.android.sambadocumentsprovider.document.loadStat
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFacade
 import kotlinx.coroutines.*
@@ -183,7 +180,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
                     // Last loading failed... Just feed the bitter fruit.
                     cache.throwLastExceptionIfAny(uri)
                     runBlocking {
-                        loadDocument(uri, smbFacade, cache)
+                        loadDocument(uri)
                     }
                 }
             }
@@ -197,7 +194,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 if (metadata.children == null || result.state == CacheResult.State.CACHE_EXPIRED) {
                     runBlocking {
                         taskManager.runTask(uri) {
-                            metadata.loadChildren(smbFacade, cache)
+                            loadChildren(metadata)
                         }
                     }
                 }
@@ -215,7 +212,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
                     if (!isLoading && docMap.isNotEmpty()) {
                         val job = executeAsync(notifyUri) {
                             taskManager.runTask(uri) {
-                                loadStat(docMap, smbFacade)
+                                loadStat(docMap)
                             }
                         }
                         cursor.loadingJob = job
@@ -241,6 +238,49 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 is FileNotFoundException -> throw e
                 is RuntimeException -> throw e
                 else -> throw IllegalStateException(e)
+            }
+        }
+    }
+
+    private suspend fun loadDocument(uri: Uri) {
+        Log.d(TAG, "loadDocument(): uri = $uri")
+        @Suppress("BlockingMethodInNonBlockingContext")
+        return withContext(Dispatchers.IO + NonCancellable) {
+            try {
+                val documentMetadata = DocumentMetadata.fromUri(uri, smbFacade)
+                Log.d(TAG, "Loaded document $documentMetadata")
+                cache.put(documentMetadata)
+            } catch (e: Exception) {
+                cache.put(uri, e)
+                throw e
+            }
+        }
+    }
+
+    private suspend fun loadChildren(metadata: DocumentMetadata) {
+        @Suppress("BlockingMethodInNonBlockingContext")
+        return withContext(Dispatchers.IO + NonCancellable) {
+            metadata.loadChildren(smbFacade)
+            metadata.children?.values?.forEach { _ ->
+                cache.put(metadata)
+            }
+        }
+    }
+
+    private suspend fun loadStat(metadataMap: Map<Uri, DocumentMetadata>) {
+        @Suppress("BlockingMethodInNonBlockingContext")
+        withContext(Dispatchers.IO) {
+            for (metadata in metadataMap.values) {
+                try {
+                    metadata.loadStat(smbFacade)
+                    if (!isActive) {
+                        break
+                    }
+                } catch (e: Exception) {
+                    // Failed to load a stat for a child... Just eat this exception, the only
+                    // consequence it may have is constantly retrying to fetch the stat.
+                    Log.e(TAG, "Failed to load stat for ${metadata.uri}")
+                }
             }
         }
     }
@@ -534,6 +574,40 @@ class SambaDocumentsProvider : DocumentsProvider() {
         }
     }
 
+    private suspend fun writeFile(
+        uri: String,
+        client: SmbClient,
+        pfd: ParcelFileDescriptor,
+        bufferPool: ByteBufferPool
+    ) {
+        val buffer = bufferPool.obtainBuffer()
+        @Suppress("BlockingMethodInNonBlockingContext")
+        withContext(Dispatchers.IO) {
+            try {
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { inputStream ->
+                    client.openFile(uri, "w").use { file ->
+                        var size: Int
+                        val buf = ByteArray(buffer.capacity())
+                        while (inputStream.read(buf).also { size = it } > 0) {
+                            buffer.put(buf, 0, size)
+                            file.write(buffer, size)
+                            buffer.clear()
+                        }
+                    }
+                }
+            } catch (e: IOException) {
+                Log.e("WriteFileTask", "Failed to write file.", e)
+                try {
+                    pfd.closeWithError(e.message)
+                } catch (exc: IOException) {
+                    Log.e("WriteFileTask", "Can't even close PFD with error.", exc)
+                }
+                throw e
+            }
+        }
+        bufferPool.recycleBuffer(buffer)
+    }
+
     private fun writeAsync(uriString: String, writeFunc: suspend () -> Unit) {
         lifecycleScope.launch {
             writeFunc()
@@ -565,6 +639,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
         bufferPool: ByteBufferPool
     ) {
         val buffer = bufferPool.obtainBuffer()
+        @Suppress("BlockingMethodInNonBlockingContext")
         withContext(Dispatchers.IO) {
             try {
                 ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { os ->

@@ -263,7 +263,7 @@ public class DocumentMetadata {
         }
     }
 
-    void loadStat(SmbClient client) throws IOException {
+    public void loadStat(SmbClient client) throws IOException {
         try {
             mStat.set(client.stat(mUri.toString()));
 
