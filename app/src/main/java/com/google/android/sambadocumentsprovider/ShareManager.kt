@@ -17,16 +17,15 @@
 package com.google.android.sambadocumentsprovider
 
 import android.content.Context
-import android.util.JsonReader
-import android.util.JsonWriter
 import android.util.Log
-import com.google.android.sambadocumentsprovider.ShareManager.ShareTuple.Companion.fromServerString
 import com.google.android.sambadocumentsprovider.encryption.EncryptionException
 import com.google.android.sambadocumentsprovider.encryption.EncryptionManager
 import com.google.android.sambadocumentsprovider.nativefacade.CredentialCache
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.IOException
-import java.io.StringReader
-import java.io.StringWriter
 import java.util.*
 import kotlin.collections.ArrayList
 
@@ -65,8 +64,7 @@ class ShareManager internal constructor(
 
     @Throws(EncryptionException::class)
     private fun updateServersData(tuple: ShareTuple, shouldNotify: Boolean) {
-        val serverString = encode(tuple)
-            ?: throw IllegalStateException("Failed to encode credential tuple.")
+        val serverString = Json.encodeToString(tuple)
         serverStringMap[tuple.uri] = encryptionManager.encrypt(serverString)
         if (tuple.isMounted) {
             mountedServerSet.add(tuple.uri)
@@ -141,104 +139,36 @@ class ShareManager internal constructor(
         listeners.remove(listener)
     }
 
+    @Serializable
     data class ShareTuple(
         val uri: String,
         val workgroup: String,
         val username: String,
         val password: String,
         val isMounted: Boolean
-    ) {
-        companion object {
-            fun ShareManager.fromServerString(serverString: String): ShareTuple {
-                val decryptedString = encryptionManager.decrypt(serverString)
-                return decode(decryptedString)
-            }
-        }
-    }
+    )
 
     companion object {
         private const val TAG = "ShareManager"
         private const val SERVER_CACHE_PREF_KEY = "ServerCachePref"
         private const val SERVER_STRING_SET_KEY = "ServerStringSet"
+    }
 
-        // JSON value
-        private const val URI_KEY = "uri"
-        private const val MOUNT_KEY = "mount"
-        private const val WORKGROUP_KEY = "workgroup"
-        private const val USERNAME_KEY = "username"
-        private const val PASSWORD_KEY = "password"
-
-        private fun encode(tuple: ShareTuple): String? {
-            return try {
-                val stringWriter = StringWriter()
-                JsonWriter(stringWriter).writeObject {
-                    name(URI_KEY).value(tuple.uri)
-                    if (tuple.username.isNotEmpty()) {
-                        name(WORKGROUP_KEY).value(tuple.workgroup)
-                        name(USERNAME_KEY).value(tuple.username)
-                        name(PASSWORD_KEY).value(tuple.password)
-                    }
-                    name(MOUNT_KEY).value(tuple.isMounted)
-                }
-                stringWriter.toString()
-            } catch (e: IOException) {
-                Log.e(TAG, "Failed to encode credential for ${tuple.uri}")
-                null
-            }
-        }
-
-        private inline fun JsonWriter.writeObject(crossinline writer: JsonWriter.() -> Unit) {
-            beginObject()
-            writer()
-            endObject()
-        }
-
-        private fun decode(content: String): ShareTuple {
-            JsonReader(StringReader(content)).apply {
-                var uri: String? = null
-                var workgroup: String? = null
-                var username: String? = null
-                var password: String? = null
-                var mounted = true
-                nextObject { name ->
-                    when (name) {
-                        URI_KEY -> uri = nextString()
-                        WORKGROUP_KEY -> workgroup = nextString()
-                        USERNAME_KEY -> username = nextString()
-                        PASSWORD_KEY -> password = nextString()
-                        MOUNT_KEY -> mounted = nextBoolean()
-                        else -> Log.w(TAG, "Ignoring unknown key $name")
-                    }
-                }
-                return ShareTuple(
-                    uri!!,
-                    workgroup ?: "",
-                    username ?: "",
-                    password ?: "",
-                    mounted
-                )
-            }
-        }
-
-        private inline fun JsonReader.nextObject(block: JsonReader.(String) -> Unit) {
-            beginObject()
-            while (hasNext()) {
-                this.block(nextName())
-            }
-            endObject()
-        }
+    private fun decryptTuple(serverString: String): ShareTuple {
+        val decryptedString = encryptionManager.decrypt(serverString)
+        return Json.decodeFromString(decryptedString)
     }
 
     fun getShareTuple(uri: String): ShareTuple? {
         val serverString = serverStringMap[uri] ?: return null
-        return fromServerString(serverString)
+        return decryptTuple(serverString)
     }
 
     init {
         // Loading saved servers.
         val serverStringSet = pref.getStringSet(SERVER_STRING_SET_KEY, emptySet())!!
         for (serverString in serverStringSet) {
-            val tuple = fromServerString(serverString)
+            val tuple = decryptTuple(serverString)
             if (tuple.isMounted) {
                 mountedServerSet.add(tuple.uri)
             }
