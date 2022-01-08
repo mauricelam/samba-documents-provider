@@ -22,7 +22,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.DocumentsContract
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatActivity
@@ -68,8 +67,9 @@ class MountServerActivity : AppCompatActivity() {
         var sharePath: String
         val availableShares: MutableList<String>
         var mounting: Boolean
+        val scaffoldState: ScaffoldState
 
-        fun clear() {
+        fun clearServerFields() {
             needsAuth = false
             domain = ""
             username = ""
@@ -93,6 +93,7 @@ class MountServerActivity : AppCompatActivity() {
                 override var sharePath by composeState("")
                 override var needsAuth by composeState(false)
                 override var mounting by composeState(false, saveable = false)
+                override val scaffoldState = rememberScaffoldState()
                 override val availableShares = remember { mutableStateListOf<String>() }
             }
 
@@ -116,6 +117,7 @@ class MountServerActivity : AppCompatActivity() {
 
             MaterialTheme {
                 Scaffold(
+                    scaffoldState = uiState.scaffoldState,
                     topBar = { AppBar() },
                     floatingActionButton = {
                         if (!uiState.mounting) {
@@ -195,26 +197,43 @@ class MountServerActivity : AppCompatActivity() {
         }
     }
 
+    inner class UserFriendlyException(msg: String) : Exception(msg) {
+        constructor(@StringRes msg: Int) : this(getString(msg))
+    }
+
     private fun tryMount(uiState: UiState) {
-        check(uiState.sharePath.isNotEmpty()) { "Share path must not be empty" }
-        if (connectivityManager.activeNetworkInfo?.isConnected != true) {
-            return showMessage(R.string.no_active_network)
+        try {
+            tryMountImpl(uiState)
+        } catch (e: UserFriendlyException) {
+            uiState.showMessage(e.message!!)
         }
-        val (host, share) = parseShareUri(uiState.serverUri)!!
-        check(share == null) { "Share must not be specified in server URI" }
+    }
+
+    private inline fun userCheck(condition: Boolean, block: () -> String) {
+        if (!condition) throw UserFriendlyException(block())
+    }
+
+    private fun tryMountImpl(uiState: UiState) {
+        userCheck(uiState.sharePath.isNotEmpty()) { "Share path must not be empty" }
+        userCheck(connectivityManager.activeNetworkInfo?.isConnected == true) {
+            getString(R.string.no_active_network)
+        }
+        val (host, share) = parseShareUri(uiState.serverUri)
+            ?: throw UserFriendlyException("Unable to parse server URI ${uiState.serverUri}")
+        userCheck(share == null) { "Share must not be specified in server URI" }
         val metadata = DocumentMetadata.createShare(host, uiState.sharePath)
         cache.put(metadata)
         uiState.mounting = true
         lifecycleScope.launch {
             try {
                 mountServer(metadata, uiState.domain, uiState.username, uiState.password)
-                uiState.clear()
+                uiState.clearServerFields()
                 launchFileManager(metadata)
-                showMessage(R.string.share_mounted)
+                uiState.showMessage(R.string.share_mounted)
                 finish()
             } catch (e: Exception) {
                 cache.remove(metadata.uri)
-                showMessage(if (e is AuthFailedException) R.string.credential_error else R.string.failed_mounting)
+                uiState.showMessage(if (e is AuthFailedException) R.string.credential_error else R.string.failed_mounting)
             }
             uiState.mounting = false
         }
@@ -267,11 +286,11 @@ class MountServerActivity : AppCompatActivity() {
                 state.needsAuth = true
             } else {
                 // Auth still fails!
-                showMessage("Authentication failed. Check your username and password")
+                state.showMessage("Authentication failed. Check your username and password")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading dropdown", e)
-            showMessage(e.message ?: "Unknown error loading dropdown")
+            state.showMessage(e.message ?: "Unknown error loading dropdown")
         }
     }
 
@@ -286,12 +305,11 @@ class MountServerActivity : AppCompatActivity() {
             })
     }
 
-    private fun showMessage(@StringRes id: Int) {
-        Toast.makeText(this, id, Toast.LENGTH_SHORT).show()
-    }
-
-    private fun showMessage(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    private fun UiState.showMessage(@StringRes id: Int) = showMessage(getString(id))
+    private fun UiState.showMessage(message: String) {
+        lifecycleScope.launch {
+            scaffoldState.snackbarHostState.showSnackbar(message, actionLabel = "Dismiss")
+        }
     }
 
     private fun launchFileManager(metadata: DocumentMetadata) {
