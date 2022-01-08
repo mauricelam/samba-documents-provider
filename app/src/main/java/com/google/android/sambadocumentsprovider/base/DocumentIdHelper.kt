@@ -44,8 +44,8 @@ object DocumentIdHelper {
     @JvmStatic
     fun toUriString(documentId: String): String = documentId
 
-    fun toUriString(serviceInfo: NsdServiceInfo): String {
-        val port = serviceInfo.port.takeUnless { it == 445 }?.let { ":$it" } ?: ""
-        return "smb://${serviceInfo.serviceName}.local${port}"
+    fun NsdServiceInfo.toUriString(): String {
+        val port = port.takeUnless { it == 445 }?.let { ":$it" } ?: ""
+        return "smb://${serviceName}.local${port}"
     }
 }

@@ -17,6 +17,7 @@
 
 #include <logger/logger.h>
 #include "CredentialCache.h"
+#define LOG_TAG "SambaClient"
 
 namespace SambaClient {
 
@@ -25,10 +26,10 @@ struct CredentialTuple emptyTuple_;
 struct CredentialTuple CredentialCache::get(const std::string &key) const {
   auto& map = tempMode_ ? tempCredentialMap_ : credentialMap_;
   if (map.find(key) != map.end()) {
-    LOGV("FINDME", "Credential found for %s", key.c_str());
+    LOGV(LOG_TAG, "Credential found for %s", key.c_str());
     return map.at(key);
   } else {
-    LOGV("FINDME", "No credential found for %s", key.c_str());
+    LOGV(LOG_TAG, "No credential found for %s", key.c_str());
     return emptyTuple_;
   }
 }

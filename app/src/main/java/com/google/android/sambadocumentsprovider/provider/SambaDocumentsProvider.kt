@@ -87,7 +87,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
         if (BuildConfig.DEBUG) Log.d(TAG, "Querying roots.")
         val projection = proj ?: DEFAULT_ROOT_PROJECTION
         val cursor = MatrixCursor(projection)
-        for (uri in shareManager.getShares()) {
+        for (uri in shareManager.getShareUris()) {
             if (!shareManager.isShareMounted(uri)) {
                 continue
             }
@@ -149,12 +149,12 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 cursor.addRow(getDocumentValues(projection, metadata))
                 return cursor
             }
-        } catch (e: FileNotFoundException) {
-            throw e
-        } catch (e: RuntimeException) {
-            throw e
         } catch (e: Exception) {
-            throw IllegalStateException(e)
+            when (e) {
+                is FileNotFoundException -> throw e
+                is RuntimeException -> throw e
+                else -> throw IllegalStateException(e)
+            }
         }
     }
 
@@ -179,7 +179,6 @@ class SambaDocumentsProvider : DocumentsProvider() {
             val cursor = DocumentCursor(projection)
             val notifyUri = toNotifyUri(uri)
             cache[uri].use { result ->
-                Log.d("FINDME", "Cache result=$result")
                 if (result.state == CacheResult.State.CACHE_MISS) {
                     // Last loading failed... Just feed the bitter fruit.
                     cache.throwLastExceptionIfAny(uri)
@@ -237,12 +236,12 @@ class SambaDocumentsProvider : DocumentsProvider() {
             } else {
                 return buildErrorCursor(projection, R.string.view_folder_denied)
             }
-        } catch (e: FileNotFoundException) {
-            throw e
-        } catch (e: RuntimeException) {
-            throw e
         } catch (e: Exception) {
-            throw IllegalStateException(e)
+            when (e) {
+                is FileNotFoundException -> throw e
+                is RuntimeException -> throw e
+                else -> throw IllegalStateException(e)
+            }
         }
     }
 
@@ -262,17 +261,16 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 DocumentsContract.Document.COLUMN_DOCUMENT_ID -> toDocumentId(metadata.uri)
                 DocumentsContract.Document.COLUMN_DISPLAY_NAME -> metadata.displayName
                 DocumentsContract.Document.COLUMN_FLAGS -> {
-                    // Always assume it can write to it until the file operation fails. Windows 10 also does
-                    // the same thing.
-                    var flag = DocumentsContract.Document.FLAG_SUPPORTS_WRITE or
+                    // Always assume it can write to it until the file operation fails. Windows 10
+                    // also does the same thing.
+                    DocumentsContract.Document.FLAG_SUPPORTS_WRITE or
                             DocumentsContract.Document.FLAG_SUPPORTS_DELETE or
                             DocumentsContract.Document.FLAG_SUPPORTS_RENAME or
                             DocumentsContract.Document.FLAG_SUPPORTS_REMOVE or
-                            DocumentsContract.Document.FLAG_SUPPORTS_MOVE
-                    if (metadata.canCreateDocument()) {
-                        flag = flag or DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
-                    }
-                    flag
+                            DocumentsContract.Document.FLAG_SUPPORTS_MOVE or
+                            if (metadata.canCreateDocument()) {
+                                DocumentsContract.Document.FLAG_DIR_SUPPORTS_CREATE
+                            } else 0
                 }
                 DocumentsContract.Document.COLUMN_MIME_TYPE -> metadata.mimeType
                 DocumentsContract.Document.COLUMN_SIZE -> metadata.size

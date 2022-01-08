@@ -42,7 +42,6 @@ class MasterBrowsingProvider implements NetworkBrowsingProvider {
 
     try {
       SmbDir rootDir = mClient.openDir(MASTER_BROWSING_DIR);
-      Log.d("FINDME", "Master browsing dir=" + rootDir);
 
       List<DirectoryEntry> workgroups = getDirectoryChildren(rootDir);
       for (DirectoryEntry workgroup : workgroups) {

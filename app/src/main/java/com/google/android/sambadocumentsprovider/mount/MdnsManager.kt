@@ -34,9 +34,12 @@ import kotlin.coroutines.suspendCoroutine
  * Helper class to scan for mDNS results
  */
 object MdnsManager {
+
+    private const val TAG = "MdnsManager"
+
     fun discover(context: Context, serviceName: String): Flow<List<NsdServiceInfo>> {
         Log.d(
-            "FINDME",
+            TAG,
             "discover() called with: context = $context, serviceName = $serviceName"
         )
         val internalSet = LinkedHashSet<NsdServiceInfo>()
@@ -53,33 +56,33 @@ object MdnsManager {
 
                 override fun onDiscoveryStarted(serviceType: String?) {
                     Log.d(
-                        "FINDME",
+                        TAG,
                         "onDiscoveryStarted() called with: serviceType = $serviceType"
                     )
                 }
 
                 override fun onDiscoveryStopped(serviceType: String?) {
                     Log.d(
-                        "FINDME",
+                        TAG,
                         "onDiscoveryStopped() called with: serviceType = $serviceType"
                     )
                 }
 
                 override fun onServiceFound(serviceInfo: NsdServiceInfo?) {
-                    Log.d("FINDME", "onServiceFound() called with: serviceInfo = $serviceInfo")
+                    Log.d(TAG, "onServiceFound() called with: serviceInfo = $serviceInfo")
                     serviceInfo ?: return
                     launch {
                         try {
                             internalSet.add(resolveService(serviceInfo, nsdManager))
                             trySend(internalSet.toList())
                         } catch (e: RuntimeException) {
-                            Log.w("FINDME", "Unable to resolve service Info")
+                            Log.w(TAG, "Unable to resolve service Info")
                         }
                     }
                 }
 
                 override fun onServiceLost(serviceInfo: NsdServiceInfo?) {
-                    Log.d("FINDME", "onServiceLost() called with: serviceInfo = $serviceInfo")
+                    Log.d(TAG, "onServiceLost() called with: serviceInfo = $serviceInfo")
                     internalSet.remove(serviceInfo)
                     trySend(internalSet.toList())
                 }
@@ -90,7 +93,7 @@ object MdnsManager {
                 try {
                     nsdManager.stopServiceDiscovery(listener)
                 } catch (e: IllegalArgumentException) {
-                    Log.d("FINDME", "Failed to stop discovery", e)
+                    Log.d(TAG, "Failed to stop discovery", e)
                 }
             }
         }

@@ -24,12 +24,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
+private const val TAG = "LoadDocumentTask"
+
 suspend fun loadDocument(uri: Uri, client: SmbClient, cache: DocumentCache) {
-    Log.d("FINDME", "loadDocument() called with: uri = $uri, client = $client, cache = $cache")
+    Log.d(TAG, "loadDocument() called with: uri = $uri, client = $client, cache = $cache")
     return withContext(Dispatchers.IO + NonCancellable) {
         try {
             val documentMetadata = DocumentMetadata.fromUri(uri, client)
-            Log.d("FINDME", "Loaded document $documentMetadata")
+            Log.d(TAG, "Loaded document $documentMetadata")
             cache.put(documentMetadata)
         } catch (e: Exception) {
             cache.put(uri, e)

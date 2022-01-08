@@ -23,6 +23,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
+private const val TAG = "LoadStat"
+
 suspend fun loadStat(metadataMap: Map<Uri, DocumentMetadata>, client: SmbClient) {
     withContext(Dispatchers.IO) {
         for (metadata in metadataMap.values) {
@@ -34,7 +36,7 @@ suspend fun loadStat(metadataMap: Map<Uri, DocumentMetadata>, client: SmbClient)
             } catch (e: Exception) {
                 // Failed to load a stat for a child... Just eat this exception, the only
                 // consequence it may have is constantly retrying to fetch the stat.
-                Log.e("FINDME", "Failed to load stat for ${metadata.uri}")
+                Log.e(TAG, "Failed to load stat for ${metadata.uri}")
             }
         }
     }

@@ -25,6 +25,7 @@ import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.lifecycle.lifecycleScope
 import com.google.android.sambadocumentsprovider.*
 import com.google.android.sambadocumentsprovider.R
@@ -55,8 +57,8 @@ class ServerListActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         shareManager = Components.shareManager
         val serverList = MdnsManager.discover(this, "_smb._tcp")
-            .onEach { Log.d("FINDME", "Found servers: $it") }
-            .catch { e -> Log.e("FINDME", "Error in server list", e) }
+            .onEach { Log.d(TAG, "Found servers: $it") }
+            .catch { e -> Log.e(TAG, "Error in server list", e) }
         setContent {
             MaterialTheme {
                 Scaffold(
@@ -87,16 +89,18 @@ class ServerListActivity : AppCompatActivity() {
 
     private fun getMountedServers(): StateFlow<List<String>> {
         return callbackFlow {
-            val listener: () -> Unit = { trySend(shareManager.getShares()) }
+            val listener: () -> Unit = { trySend(shareManager.getShareUris()) }
             shareManager.addListener(listener)
 
             awaitClose { shareManager.removeListener(listener) }
-        }.stateIn(lifecycleScope, SharingStarted.Eagerly, shareManager.getShares())
+        }.stateIn(lifecycleScope, SharingStarted.Eagerly, shareManager.getShareUris())
     }
 
-    private fun addServerActivity(serviceInfo: NsdServiceInfo?) {
+    private fun addServerActivity(serverUri: String?) {
         startActivity(Intent(this, MountServerActivity::class.java).apply {
-            serviceInfo?.let { info -> putExtra("serverUri", toUriString(info)) }
+            if (serverUri != null) {
+                putExtra("serverUri", serverUri)
+            }
         })
 //        startActivity(Intent(this, AuthActivity::class.java).apply {
 //            serviceInfo?.let { info ->
@@ -118,39 +122,47 @@ class ServerListActivity : AppCompatActivity() {
                 ListItem(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { addServerActivity(serviceInfo) },
+                        .clickable { addServerActivity(serviceInfo.toUriString()) },
                     icon = { Icon(Icons.Filled.Dns, "") }
                 ) {
                     val portDescription = serviceInfo.port.takeIf { it != 455 }?.let { ":$it" }
                     Text(text = "${serviceInfo.serviceName}${portDescription}")
                 }
             }
-            items(savedServerListState) { serverName ->
+            items(savedServerListState) { serverUri ->
                 ListItem(
-                    modifier = Modifier.clickable { viewMountedDriveActivity(serverName) },
+                    modifier = Modifier
+                        .clickable { viewMountedDriveActivity(serverUri) }
+                        .pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { addServerActivity(serverUri) })
+                        },
                     icon = { Icon(Icons.Filled.Favorite, "") },
                     trailing = {
-                        IconButton(onClick = { shareManager.unmountServer(serverName) }) {
+                        IconButton(onClick = { shareManager.unmountServer(serverUri) }) {
                             Icon(Icons.Filled.Eject, "Eject")
                         }
                     }
                 ) {
-                    Text(text = serverName)
+                    Text(serverUri)
                 }
             }
         }
     }
 
-    private fun viewMountedDriveActivity(serverName: String) {
+    private fun viewMountedDriveActivity(smbUri: String) {
         startActivity(Intent(Intent.ACTION_VIEW).apply {
             addCategory(Intent.CATEGORY_DEFAULT)
             setDataAndType(
                 DocumentsContract.buildRootUri(
                     "com.google.android.sambadocumentsprovider",
-                    serverName
+                    smbUri
                 ),
                 DocumentsContract.Root.MIME_TYPE_ITEM
             )
         })
+    }
+
+    companion object {
+        private const val TAG = "ServerListActivity"
     }
 }

@@ -58,6 +58,7 @@ class MountServerActivity : AppCompatActivity() {
     private val networkBrowser by lazy { NetworkBrowser(smbClient, Components.credentialsCache) }
 
     private lateinit var connectivityManager: ConnectivityManager
+    private var editMode = false
 
     private interface UiState {
         var serverUri: String
@@ -86,24 +87,33 @@ class MountServerActivity : AppCompatActivity() {
         setContent {
             val coroutineScope = rememberCoroutineScope()
             val uiState = object : UiState {
-                override var serverUri by rememberSaveable {
-                    mutableStateOf(intent.getStringExtra("serverUri") ?: "")
-                }
+                override var serverUri by rememberSaveable { mutableStateOf("") }
                 override var domain by rememberSaveable { mutableStateOf("") }
                 override var username by rememberSaveable { mutableStateOf("") }
                 override var password by rememberSaveable { mutableStateOf("") }
                 override var sharePath by rememberSaveable { mutableStateOf("") }
                 override var needsAuth by rememberSaveable { mutableStateOf(false) }
-                override val availableShares = remember {
-                    mutableStateListOf<String>().also {
-                        if (serverUri.isNotEmpty()) {
-                            val uiState = this
-                            coroutineScope.launch { loadAvailableShares(uiState) }
-                        }
+                override val availableShares = remember { mutableStateListOf<String>() }
+            }
+            val focusManager = LocalFocusManager.current
+
+            intent.getStringExtra("serverUri").takeUnless { it.isNullOrEmpty() }?.let { shareUri ->
+                val (host, share) = parseShareUri(shareUri) ?: return@let
+                uiState.serverUri = "smb://$host"
+                uiState.sharePath = share ?: ""
+                if (shareUri.isNotEmpty()) {
+                    shareManager.getShareTuple(shareUri)?.let { tuple ->
+                        editMode = true
+                        uiState.domain = tuple.workgroup
+                        uiState.username = tuple.username
+                        uiState.password = tuple.password
+                        uiState.needsAuth = tuple.username.isNotEmpty()
+                    }
+                    LaunchedEffect(uiState) {
+                        loadAvailableShares(uiState)
                     }
                 }
             }
-            val focusManager = LocalFocusManager.current
 
             MaterialTheme {
                 Scaffold(
@@ -171,13 +181,9 @@ class MountServerActivity : AppCompatActivity() {
         if (connectivityManager.activeNetworkInfo?.isConnected != true) {
             return showMessage(R.string.no_active_network)
         }
-        val metadata = DocumentMetadata.createShare(
-            parseServerHost(uiState.serverUri),
-            uiState.sharePath
-        )
-        if (shareManager.isShareMounted(metadata.uri.toString())) {
-            return showMessage(R.string.share_already_mounted)
-        }
+        val (host, share) = parseShareUri(uiState.serverUri)!!
+        check(share == null) { "Share must not be specified in server URI" }
+        val metadata = DocumentMetadata.createShare(host, uiState.sharePath)
         cache.put(metadata)
         val dialog =
             ProgressDialog.show(this, null, getString(R.string.mounting_share), true)
@@ -201,13 +207,18 @@ class MountServerActivity : AppCompatActivity() {
         metadata: DocumentMetadata,
         domain: String,
         username: String,
-        password: String
+        password: String,
     ) {
         try {
             withContext(Dispatchers.IO) {
                 shareManager.addServer(
-                    metadata.uri.toString(), domain, username, password,
-                    checker = { metadata.loadChildren(smbClient) }, mount = true
+                    metadata.uri.toString(),
+                    domain,
+                    username,
+                    password,
+                    checker = { metadata.loadChildren(smbClient) },
+                    mount = true,
+                    updateExisting = editMode
                 )
             }
             for (m in metadata.children!!.values) {
@@ -226,7 +237,12 @@ class MountServerActivity : AppCompatActivity() {
     private suspend fun loadAvailableShares(state: UiState) {
         try {
             state.availableShares.clear()
-            val shares = networkBrowser.getShares(state.serverUri, state.domain, state.username, state.password)
+            val shares = networkBrowser.getShares(
+                state.serverUri,
+                state.domain,
+                state.username,
+                state.password
+            )
             state.availableShares.addAll(shares)
         } catch (e: AuthFailedException) {
             if (!state.needsAuth) {
@@ -236,7 +252,7 @@ class MountServerActivity : AppCompatActivity() {
                 showMessage("Authentication failed. Check your username and password")
             }
         } catch (e: Exception) {
-            Log.e("FINDME", "Error loading dropdown", e)
+            Log.e(TAG, "Error loading dropdown", e)
             showMessage(e.message ?: "Unknown error loading dropdown")
         }
     }
@@ -276,7 +292,7 @@ class MountServerActivity : AppCompatActivity() {
         })
     }
 
-    private fun parseServerHost(path: String): String? {
+    private fun parseShareUri(path: String): Pair<String, String?>? {
         if (path.startsWith("\\")) {
             // Possibly Windows share path
             if (path.length == 1) {
@@ -284,15 +300,14 @@ class MountServerActivity : AppCompatActivity() {
             }
             val endCharacter = if (path.endsWith("\\")) path.length - 1 else path.length
             val segments = path.substring(2, endCharacter).split("\\\\")
-            check(segments.size == 1) { "SMB path should not specify share" }
-            return segments[0]
+            return segments[0] to segments.getOrNull(1)
         } else {
             // Try SMB URI
             val smbUri = Uri.parse(path)
             val host = smbUri.authority
             if (host.isNullOrEmpty()) return null
-            check(smbUri.pathSegments.size == 0) { "SMB URI should not specify share" }
-            return host
+            check(smbUri.pathSegments.size <= 1) { "SMB URI should not have segment after share" }
+            return host to smbUri.pathSegments.getOrNull(0)
         }
     }
 

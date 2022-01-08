@@ -50,7 +50,7 @@ inline fun <T> catchExceptions(block: () -> T): T? {
     return try {
         block()
     } catch (e: Exception) {
-        Log.w("FINDME", "Caught exception", e)
+        Log.w("SambaDocumentsProvider", "Caught exception", e)
         null
     }
 }

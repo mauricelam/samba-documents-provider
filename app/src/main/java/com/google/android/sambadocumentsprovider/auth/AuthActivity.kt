@@ -118,13 +118,14 @@ class AuthActivity : AppCompatActivity() {
             try {
                 withContext(Dispatchers.IO) {
                     val shareMetadata = DocumentMetadata.createShare(Uri.parse(state.shareUri))
-                    shareManager.addOrUpdateServer(
+                    shareManager.addServer(
                         state.shareUri,
                         state.domain,
                         state.username,
                         state.password,
                         { shareMetadata.loadChildren(client) },
-                        false
+                        mount = false,
+                        updateExisting = true,
                     )
                 }
                 setResult(RESULT_OK)
@@ -146,7 +147,6 @@ class AuthActivity : AppCompatActivity() {
         private const val TAG = "AuthActivity"
         private const val SHARE_URI_KEY = "shareUri"
 
-        @JvmStatic
         fun createAuthIntent(context: Context, shareUri: String?): PendingIntent {
             val authIntent = Intent()
             authIntent.component = ComponentName(

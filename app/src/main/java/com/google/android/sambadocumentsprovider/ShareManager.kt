@@ -18,9 +18,9 @@ package com.google.android.sambadocumentsprovider
 
 import android.content.Context
 import android.util.JsonReader
-import android.util.JsonToken
 import android.util.JsonWriter
 import android.util.Log
+import com.google.android.sambadocumentsprovider.ShareManager.ShareTuple.Companion.fromServerString
 import com.google.android.sambadocumentsprovider.encryption.EncryptionException
 import com.google.android.sambadocumentsprovider.encryption.EncryptionManager
 import com.google.android.sambadocumentsprovider.nativefacade.CredentialCache
@@ -32,82 +32,55 @@ import kotlin.collections.ArrayList
 
 class ShareManager internal constructor(
     context: Context,
-    private val mCredentialCache: CredentialCache
+    private val credentialCache: CredentialCache
 ) {
-    private val mPref =
+    private val pref =
         context.getSharedPreferences(SERVER_CACHE_PREF_KEY, Context.MODE_PRIVATE)
-    private val mServerStringSet: MutableSet<String>
-    private val mMountedServerSet = HashSet<String>()
-    private val mServerStringMap = HashMap<String, String>()
-    private val mEncryptionManager = EncryptionManager(context)
-    private val mListeners = ArrayList<() -> Unit>()
+    private val mountedServerSet = HashSet<String>()
+    private val serverStringMap = HashMap<String, String>()
+    private val encryptionManager = EncryptionManager(context)
+    private val listeners = ArrayList<() -> Unit>()
 
     /**
      * Save the server and credentials to permanent storage.
-     * Throw an exception if a server with such a uri is already present.
+     * Update the server info. If a server with such a uri doesn't exist, create it.
      */
     @Synchronized
     @Throws(IOException::class)
     fun addServer(
         uri: String, workgroup: String, username: String, password: String,
-        checker: () -> Unit, mount: Boolean
+        checker: () -> Unit, mount: Boolean, updateExisting: Boolean = false
     ) {
-        check(uri !in mMountedServerSet) { "Uri $uri is already stored." }
-        saveServerInfo(uri, workgroup, username, password, checker, mount)
-    }
-
-    /**
-     * Update the server info. If a server with such a uri doesn't exist, create it.
-     */
-    @Synchronized
-    @Throws(IOException::class)
-    fun addOrUpdateServer(
-        uri: String, workgroup: String, username: String, password: String,
-        checker: () -> Unit, mount: Boolean
-    ) {
-        saveServerInfo(uri, workgroup, username, password, checker, mount)
-    }
-
-    @Throws(IOException::class)
-    private fun saveServerInfo(
-        uri: String, workgroup: String, username: String, password: String,
-        checker: () -> Unit, mount: Boolean
-    ) {
-        checkServerCredentials(uri, workgroup, username, password, checker)
-        val hasPassword = username.isNotEmpty() && password.isNotEmpty()
-        val tuple = if (hasPassword) ShareTuple(
-            workgroup,
-            username,
-            password,
-            mount
-        ) else ShareTuple.EMPTY_TUPLE
-        updateServersData(uri, tuple, mount)
-    }
-
-    private fun updateServersData(uri: String, tuple: ShareTuple, shouldNotify: Boolean) {
-        val serverString = encode(uri, tuple)
-            ?: throw IllegalStateException("Failed to encode credential tuple.")
-        val encryptedString: String
-        try {
-            encryptedString = mEncryptionManager.encrypt(serverString)
-            mServerStringSet.add(encryptedString)
-        } catch (e: EncryptionException) {
-            throw IllegalStateException("Failed to encrypt server data", e)
-        }
-        if (tuple.isMounted) {
-            mMountedServerSet.add(uri)
+        if (updateExisting) {
+            check(uri in mountedServerSet) { "Cannot find server $uri to update" }
         } else {
-            mMountedServerSet.remove(uri)
+            check(uri !in mountedServerSet) { "Cannot add server $uri. Server already exists." }
         }
-        mPref.edit().putStringSet(SERVER_STRING_SET_KEY, mServerStringSet).apply()
-        mServerStringMap[uri] = encryptedString
+        saveAndCheckServerCredentials(uri, workgroup, username, password, checker)
+        updateServersData(
+            ShareTuple(uri, workgroup, username, password, mount),
+            shouldNotify = mount
+        )
+    }
+
+    @Throws(EncryptionException::class)
+    private fun updateServersData(tuple: ShareTuple, shouldNotify: Boolean) {
+        val serverString = encode(tuple)
+            ?: throw IllegalStateException("Failed to encode credential tuple.")
+        serverStringMap[tuple.uri] = encryptionManager.encrypt(serverString)
+        if (tuple.isMounted) {
+            mountedServerSet.add(tuple.uri)
+        } else {
+            mountedServerSet.remove(tuple.uri)
+        }
+        pref.edit().putStringSet(SERVER_STRING_SET_KEY, serverStringMap.values.toSet()).apply()
         if (shouldNotify) {
             notifyServerChange()
         }
     }
 
     @Throws(IOException::class)
-    private fun checkServerCredentials(
+    private fun saveAndCheckServerCredentials(
         uri: String,
         workgroup: String,
         username: String,
@@ -115,83 +88,71 @@ class ShareManager internal constructor(
         checker: () -> Unit,
     ) {
         if (username.isNotEmpty() && password.isNotEmpty()) {
-            mCredentialCache.putCredential(uri, workgroup, username, password)
+            credentialCache.putCredential(uri, workgroup, username, password)
         }
         try {
             checker()
         } catch (e: Exception) {
             Log.i(TAG, "Failed to mount server.", e)
-            mCredentialCache.removeCredential(uri)
+            credentialCache.removeCredential(uri)
             throw e
         }
     }
 
-    private fun encryptServers(servers: List<String?>) {
-        for (server in servers) {
-            try {
-                mServerStringSet.add(mEncryptionManager.encrypt(server))
-            } catch (e: EncryptionException) {
-                Log.e(TAG, "Failed to encrypt server data: ", e)
-            }
-        }
-        mPref.edit().putStringSet(SERVER_STRING_SET_KEY, mServerStringSet).apply()
-    }
-
     @Synchronized
     fun unmountServer(uri: String): Boolean {
-        if (!mServerStringMap.containsKey(uri)) {
+        if (!serverStringMap.containsKey(uri)) {
             return true
         }
-        if (!mServerStringSet.remove(mServerStringMap[uri])) {
-            Log.e(TAG, "Failed to remove server $uri")
-            return false
-        }
-        mServerStringMap.remove(uri)
-        mMountedServerSet.remove(uri)
-        mPref.edit().putStringSet(SERVER_STRING_SET_KEY, mServerStringSet).apply()
-        mCredentialCache.removeCredential(uri)
+        serverStringMap.remove(uri)
+        mountedServerSet.remove(uri)
+        pref.edit().putStringSet(SERVER_STRING_SET_KEY, serverStringMap.values.toSet()).apply()
+        credentialCache.removeCredential(uri)
         notifyServerChange()
         return true
     }
 
     @Synchronized
-    fun getShares(): List<String> {
-        return mServerStringMap.keys.toList()
+    fun getShareUris(): List<String> {
+        return serverStringMap.keys.toList()
     }
 
     @Synchronized
     fun containsShare(uri: String): Boolean {
-        return mServerStringMap.containsKey(uri)
+        return serverStringMap.containsKey(uri)
     }
 
     @Synchronized
     fun isShareMounted(uri: String): Boolean {
-        return mMountedServerSet.contains(uri)
+        return mountedServerSet.contains(uri)
     }
 
     private fun notifyServerChange() {
-        for (i in mListeners.indices.reversed()) {
-            mListeners[i]()
+        for (i in listeners.indices.reversed()) {
+            listeners[i]()
         }
     }
 
     fun addListener(listener: () -> Unit) {
-        mListeners.add(listener)
+        listeners.add(listener)
     }
 
     fun removeListener(listener: () -> Unit) {
-        mListeners.remove(listener)
+        listeners.remove(listener)
     }
 
-    private data class ShareTuple(
+    data class ShareTuple(
+        val uri: String,
         val workgroup: String,
         val username: String,
         val password: String,
         val isMounted: Boolean
     ) {
-
         companion object {
-            val EMPTY_TUPLE = ShareTuple("", "", "", true)
+            fun ShareManager.fromServerString(serverString: String): ShareTuple {
+                val decryptedString = encryptionManager.decrypt(serverString)
+                return decode(decryptedString)
+            }
         }
     }
 
@@ -203,20 +164,25 @@ class ShareManager internal constructor(
         // JSON value
         private const val URI_KEY = "uri"
         private const val MOUNT_KEY = "mount"
-        private const val CREDENTIAL_TUPLE_KEY = "credentialTuple"
         private const val WORKGROUP_KEY = "workgroup"
         private const val USERNAME_KEY = "username"
         private const val PASSWORD_KEY = "password"
-        private fun encode(uri: String, tuple: ShareTuple): String? {
+
+        private fun encode(tuple: ShareTuple): String? {
             return try {
                 val stringWriter = StringWriter()
                 JsonWriter(stringWriter).writeObject {
-                    name(URI_KEY).value(uri)
-                    name(CREDENTIAL_TUPLE_KEY).encodeTuple(tuple)
+                    name(URI_KEY).value(tuple.uri)
+                    if (tuple.username.isNotEmpty()) {
+                        name(WORKGROUP_KEY).value(tuple.workgroup)
+                        name(USERNAME_KEY).value(tuple.username)
+                        name(PASSWORD_KEY).value(tuple.password)
+                    }
+                    name(MOUNT_KEY).value(tuple.isMounted)
                 }
                 stringWriter.toString()
             } catch (e: IOException) {
-                Log.e(TAG, "Failed to encode credential for $uri")
+                Log.e(TAG, "Failed to encode credential for ${tuple.uri}")
                 null
             }
         }
@@ -227,97 +193,62 @@ class ShareManager internal constructor(
             endObject()
         }
 
-        @Throws(IOException::class)
-        private fun JsonWriter.encodeTuple(tuple: ShareTuple) {
-            if (tuple === ShareTuple.EMPTY_TUPLE) {
-                nullValue()
-            } else {
-                writeObject {
-                    name(WORKGROUP_KEY).value(tuple.workgroup)
-                    name(USERNAME_KEY).value(tuple.username)
-                    name(PASSWORD_KEY).value(tuple.password)
-                    name(MOUNT_KEY).value(tuple.isMounted)
-                }
-            }
-        }
-
-        private fun decode(content: String, shareMap: MutableMap<String, ShareTuple>): String? {
-            try {
-                JsonReader(StringReader(content)).apply {
-                    beginObject()
-                    var uri: String? = null
-                    var tuple: ShareTuple? = null
-                    while (hasNext()) {
-                        when (val name = nextName()) {
-                            URI_KEY -> uri = nextString()
-                            CREDENTIAL_TUPLE_KEY -> tuple = nextTuple()
-                            else -> Log.w(TAG, "Ignoring unknown key $name")
-                        }
+        private fun decode(content: String): ShareTuple {
+            JsonReader(StringReader(content)).apply {
+                var uri: String? = null
+                var workgroup: String? = null
+                var username: String? = null
+                var password: String? = null
+                var mounted = true
+                nextObject { name ->
+                    when (name) {
+                        URI_KEY -> uri = nextString()
+                        WORKGROUP_KEY -> workgroup = nextString()
+                        USERNAME_KEY -> username = nextString()
+                        PASSWORD_KEY -> password = nextString()
+                        MOUNT_KEY -> mounted = nextBoolean()
+                        else -> Log.w(TAG, "Ignoring unknown key $name")
                     }
-                    endObject()
-                    check(!(uri == null || tuple == null)) { "Either uri or tuple is null." }
-                    shareMap[uri] = tuple
-                    return uri
                 }
-            } catch (e: IOException) {
-                Log.e(TAG, "Failed to load credential.")
-                return null
+                return ShareTuple(
+                    uri!!,
+                    workgroup ?: "",
+                    username ?: "",
+                    password ?: "",
+                    mounted
+                )
             }
         }
 
-        @Throws(IOException::class)
-        private fun JsonReader.nextTuple(): ShareTuple {
-            if (peek() == JsonToken.NULL) {
-                nextNull()
-                return ShareTuple.EMPTY_TUPLE
-            }
-            var workgroup: String? = null
-            var username: String? = null
-            var password: String? = null
-            var mounted = true
+        private inline fun JsonReader.nextObject(block: JsonReader.(String) -> Unit) {
             beginObject()
             while (hasNext()) {
-                when (val name = nextName()) {
-                    WORKGROUP_KEY -> workgroup = nextString()
-                    USERNAME_KEY -> username = nextString()
-                    PASSWORD_KEY -> password = nextString()
-                    MOUNT_KEY -> {
-                        mounted = nextBoolean()
-                        Log.w(TAG, "Ignoring unknown key $name")
-                    }
-                    else -> Log.w(TAG, "Ignoring unknown key $name")
-                }
+                this.block(nextName())
             }
             endObject()
-            return ShareTuple(workgroup!!, username!!, password!!, mounted)
         }
+    }
+
+    fun getShareTuple(uri: String): ShareTuple? {
+        val serverString = serverStringMap[uri] ?: return null
+        return fromServerString(serverString)
     }
 
     init {
         // Loading saved servers.
-        val serverStringSet = mPref.getStringSet(SERVER_STRING_SET_KEY, emptySet())!!
-        val shareMap = HashMap<String, ShareTuple>(serverStringSet.size)
-        val forceEncryption: MutableList<String> = ArrayList()
+        val serverStringSet = pref.getStringSet(SERVER_STRING_SET_KEY, emptySet())!!
         for (serverString in serverStringSet) {
-            var decryptedString = serverString
-            try {
-                decryptedString = mEncryptionManager.decrypt(serverString)
-            } catch (e: EncryptionException) {
-                Log.i(TAG, "Failed to decrypt server data: ", e)
-                forceEncryption.add(serverString)
-            }
-            val uri = decode(decryptedString, shareMap)
-            if (uri != null) {
-                mServerStringMap[uri] = serverString
-            }
-        }
-        mServerStringSet = HashSet(serverStringSet)
-        encryptServers(forceEncryption)
-        for ((key, tuple) in shareMap) {
+            val tuple = fromServerString(serverString)
             if (tuple.isMounted) {
-                mMountedServerSet.add(key)
+                mountedServerSet.add(tuple.uri)
             }
-            mCredentialCache.putCredential(key, tuple.workgroup, tuple.username, tuple.password)
+            credentialCache.putCredential(
+                tuple.uri,
+                tuple.workgroup,
+                tuple.username,
+                tuple.password
+            )
+            serverStringMap[tuple.uri] = serverString
         }
     }
 }
