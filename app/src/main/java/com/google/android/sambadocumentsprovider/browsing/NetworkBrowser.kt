@@ -16,19 +16,20 @@
  */
 package com.google.android.sambadocumentsprovider.browsing
 
-import android.util.Log
 import com.google.android.sambadocumentsprovider.base.DirectoryEntry
 import com.google.android.sambadocumentsprovider.browsing.broadcast.BroadcastBrowsingProvider
 import com.google.android.sambadocumentsprovider.nativefacade.CredentialCache
 import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
-import com.google.android.sambadocumentsprovider.nativefacade.SmbDir
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
  * This class discovers Samba servers and shares under them available on the local network.
  */
-class NetworkBrowser(private val smbClient: SmbClient, private val credentialCache: CredentialCache) {
+class NetworkBrowser(
+    private val smbClient: SmbClient,
+    private val credentialCache: CredentialCache
+) {
     private val masterProvider: NetworkBrowsingProvider = MasterBrowsingProvider(smbClient)
     private val broadcastProvider: NetworkBrowsingProvider = BroadcastBrowsingProvider()
 
@@ -42,32 +43,20 @@ class NetworkBrowser(private val smbClient: SmbClient, private val credentialCac
         username: String,
         password: String
     ): List<String> {
+        @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO) {
             try {
                 credentialCache.setTempMode(true)
                 if (username.isNotEmpty() || password.isNotEmpty()) {
                     credentialCache.putCredential("$serverUri/IPC$", domain, username, password)
                 }
-                smbClient.openDir(serverUri).iterDir()
+                val dir = smbClient.openDir(serverUri)
+                generateSequence { dir.readDir() }
+                    .filter { share -> share.type == DirectoryEntry.Type.FILE_SHARE }
                     .mapNotNull { shareEntry -> shareEntry.name?.trim { it <= ' ' } }
                     .toList()
             } finally {
                 credentialCache.setTempMode(false)
-            }
-        }
-    }
-
-    private fun SmbDir.iterDir(): Sequence<DirectoryEntry> {
-        return sequence {
-            var shareEntry: DirectoryEntry?
-            while (readDir().also { shareEntry = it } != null) {
-                shareEntry?.let { share ->
-                    if (share.type == DirectoryEntry.Type.FILE_SHARE) {
-                        yield(share)
-                    } else {
-                        Log.i(TAG, "Unsupported entry type: ${share.type}")
-                    }
-                }
             }
         }
     }

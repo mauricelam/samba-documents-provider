@@ -31,7 +31,7 @@ import java.io.IOException
 class SambaProxyFileCallback(
     private val uri: String,
     private val file: SmbFile,
-    private val bufferPool: ByteBufferPool
+    private val bufferPool: ByteBufferPool,
 ) : ProxyFileDescriptorCallback() {
 
     private val _deferred = CompletableDeferred<Unit>()
@@ -65,8 +65,6 @@ class SambaProxyFileCallback(
             return total
         } catch (e: IOException) {
             throwErrnoException(e)
-        } finally {
-            bufferPool.recycleBuffer(buffer)
         }
         return 0
     }
@@ -110,10 +108,9 @@ class SambaProxyFileCallback(
     private fun throwErrnoException(e: IOException) {
         // Hack around that SambaProxyFileCallback throws ErrnoException rather than IOException
         // assuming the underlying cause is an ErrnoException.
-        if (e.cause is ErrnoException) {
-            throw (e.cause as ErrnoException)
-        } else {
-            throw ErrnoException("I/O", OsConstants.EIO, e)
+        when (val cause = e.cause) {
+            is ErrnoException -> throw cause
+            else -> throw ErrnoException("I/O", OsConstants.EIO, e)
         }
     }
 

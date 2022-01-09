@@ -95,15 +95,16 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 } else {
                     result.item
                 }
-                val name = metadata.displayName
                 cursor.addRow(
                     arrayOf<Any>(
                         toRootId(metadata),
                         toDocumentId(parsedUri),
-                        name,
+                        metadata.displayName!!,
                         DocumentsContract.Root.FLAG_SUPPORTS_CREATE
                                 or DocumentsContract.Root.FLAG_SUPPORTS_IS_CHILD
-                                or DocumentsContract.Root.FLAG_SUPPORTS_EJECT,
+                                or if (SDK_INT >= VERSION_CODES.O) {
+                            DocumentsContract.Root.FLAG_SUPPORTS_EJECT
+                        } else 0,
                         R.drawable.ic_folder_shared
                     )
                 )
@@ -210,10 +211,11 @@ class SambaDocumentsProvider : DocumentsProvider() {
                         cursor.addRow(getDocumentValues(projection, child))
                     }
                     if (!isLoading && docMap.isNotEmpty()) {
-                        val job = executeAsync(notifyUri) {
+                        val job = lifecycleScope.launch {
                             taskManager.runTask(uri) {
                                 loadStat(docMap)
                             }
+                            contentResolver.notifyChange(notifyUri, null, NOTIFY_UPDATE)
                         }
                         cursor.loadingJob = job
                         isLoading = true
@@ -261,7 +263,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
         @Suppress("BlockingMethodInNonBlockingContext")
         return withContext(Dispatchers.IO + NonCancellable) {
             metadata.loadChildren(smbFacade)
-            metadata.children?.values?.forEach { _ ->
+            metadata.children?.values?.forEach {
                 cache.put(metadata)
             }
         }
@@ -335,7 +337,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 comment = "",
                 displayName
             )
-            val uri = DocumentMetadata.buildChildUri(parentUri, entry)
+            val uri = DocumentMetadata.buildChildUri(parentUri, entry)!!
             if (isDir) {
                 smbFacade.mkdir(uri.toString())
             } else {
@@ -343,11 +345,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             }
 
             // Notify anyone who's listening on the parent folder.
-            providerContext.contentResolver.notifyChange(
-                toNotifyUri(parentUri),
-                null,
-                ContentResolver.NOTIFY_INSERT
-            )
+            contentResolver.notifyChange(toNotifyUri(parentUri), null, NOTIFY_INSERT)
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
                     // It must be a file, and the file is truncated... Reset its cache.
@@ -381,10 +379,10 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 ?: throw UnsupportedOperationException("$displayName is not a valid name.")
             smbFacade.rename(uri.toString(), newUri.toString())
             revokeDocumentPermission(documentId)
-            providerContext.contentResolver.notifyChange(
+            contentResolver.notifyChange(
                 toNotifyUri(parentUri),
                 null,
-                ContentResolver.NOTIFY_UPDATE
+                NOTIFY_UPDATE
             )
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
@@ -415,19 +413,15 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 deleteFile(metadata)
             }
             val notifyUri = toNotifyUri(DocumentMetadata.buildParentUri(uri))
-            providerContext.contentResolver.notifyChange(
-                notifyUri,
-                null,
-                ContentResolver.NOTIFY_DELETE
-            )
+            contentResolver.notifyChange(notifyUri, null, NOTIFY_DELETE)
         } catch (e: FileNotFoundException) {
             Log.w(TAG, "$documentId is not found. No need to delete it.", e)
             cache.remove(uri)
             val notifyUri = toNotifyUri(DocumentMetadata.buildParentUri(uri))
-            providerContext.contentResolver.notifyChange(
+            contentResolver.notifyChange(
                 notifyUri,
                 null,
-                ContentResolver.NOTIFY_DELETE
+                NOTIFY_DELETE
             )
         } catch (e: IOException) {
             throw IllegalStateException(e)
@@ -483,19 +477,18 @@ class SambaDocumentsProvider : DocumentsProvider() {
             ) {
                 throw UnsupportedOperationException("Instance move across shares are not supported.")
             }
-            val targetUri = DocumentMetadata
-                .buildChildUri(targetParentUri, uri.lastPathSegment)
+            val targetUri = DocumentMetadata.buildChildUri(targetParentUri, uri.lastPathSegment)!!
             smbFacade.rename(uri.toString(), targetUri.toString())
             revokeDocumentPermission(sourceDocumentId)
-            providerContext.contentResolver.notifyChange(
+            contentResolver.notifyChange(
                 toNotifyUri(DocumentMetadata.buildParentUri(uri)),
                 null,
-                ContentResolver.NOTIFY_UPDATE
+                NOTIFY_UPDATE
             )
-            providerContext.contentResolver.notifyChange(
+            contentResolver.notifyChange(
                 toNotifyUri(targetParentUri),
                 null,
-                ContentResolver.NOTIFY_UPDATE
+                NOTIFY_UPDATE
             )
             cache[uri].use { result ->
                 if (result.state != CacheResult.State.CACHE_MISS) {
@@ -620,10 +613,10 @@ class SambaDocumentsProvider : DocumentsProvider() {
             }
             // Notify write change
             val parentUri = DocumentMetadata.buildParentUri(uri)
-            providerContext.contentResolver.notifyChange(
+            contentResolver.notifyChange(
                 toNotifyUri(parentUri),
                 null,
-                ContentResolver.NOTIFY_UPDATE
+                NOTIFY_UPDATE
             )
         }
     }
@@ -665,17 +658,6 @@ class SambaDocumentsProvider : DocumentsProvider() {
         bufferPool.recycleBuffer(buffer)
     }
 
-    private fun executeAsync(uri: Uri, block: suspend () -> Unit): Job {
-        return lifecycleScope.launch {
-            block()
-            providerContext.contentResolver.notifyChange(
-                uri,
-                null,
-                false
-            )
-        }
-    }
-
     private val lifecycleScope: CoroutineScope = GlobalScope
 
     companion object {
@@ -697,5 +679,8 @@ class SambaDocumentsProvider : DocumentsProvider() {
             DocumentsContract.Document.COLUMN_LAST_MODIFIED,
             DocumentsContract.Document.COLUMN_ICON
         )
+        private const val NOTIFY_UPDATE = ContentResolver.NOTIFY_UPDATE
+        private const val NOTIFY_DELETE = ContentResolver.NOTIFY_DELETE
+        private const val NOTIFY_INSERT = ContentResolver.NOTIFY_INSERT
     }
 }

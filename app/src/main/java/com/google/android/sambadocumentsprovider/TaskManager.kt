@@ -28,7 +28,6 @@ class TaskManager {
 
     suspend fun runTask(uri: Uri, task: suspend () -> Unit) {
         coroutineScope {
-            // TODO: Use different executor for different servers.
             if (tasks[uri]?.isActive != true) {
                 tasks[uri] = async { task() }
             } else {

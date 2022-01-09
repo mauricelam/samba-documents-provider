@@ -23,8 +23,19 @@ import java.nio.ByteBuffer
 class ByteBufferPool {
     private val bufferPool: Pools.Pool<ByteBuffer> = SynchronizedPool(16)
 
+    inline fun <T> useBuffer(block: (ByteBuffer) -> T): T {
+        val buffer = obtainBuffer()
+        try {
+            return block(buffer)
+        } finally {
+            recycleBuffer(buffer)
+        }
+    }
+
     fun obtainBuffer(): ByteBuffer {
-        return bufferPool.acquire() ?: ByteBuffer.allocateDirect(BUFFER_CAPACITY)
+        val buffer = bufferPool.acquire() ?: ByteBuffer.allocateDirect(BUFFER_CAPACITY)
+        buffer.clear()
+        return buffer
     }
 
     fun recycleBuffer(buffer: ByteBuffer) {

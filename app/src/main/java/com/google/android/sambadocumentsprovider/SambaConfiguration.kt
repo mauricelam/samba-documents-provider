@@ -106,8 +106,7 @@ internal class SambaConfiguration(private val mHomeFolder: File, shareFolder: Fi
     private fun read(smbFile: File) {
         mConfigurations.clear()
         BufferedReader(FileReader(smbFile)).use { reader ->
-            var line: String
-            while (reader.readLine().also { line = it } != null) {
+            for (line in reader.lines()) {
                 val conf = line.split(CONF_KEY_VALUE_SEPARATOR).toTypedArray()
                 if (conf.size == 2) {
                     mConfigurations[conf[0]] = conf[1]

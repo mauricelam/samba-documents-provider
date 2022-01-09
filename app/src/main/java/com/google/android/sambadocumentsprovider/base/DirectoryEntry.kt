@@ -20,9 +20,7 @@ package com.google.android.sambadocumentsprovider.base
  * Denotes a directory entry in Samba. This can represent not only a directory in Samba, but also
  * a workgroup, a share or a file.
  */
-data class DirectoryEntry(
-    val type: Type, val comment: String, var name: String?
-) {
+data class DirectoryEntry(val type: Type, val comment: String, var name: String?) {
 
     constructor(typeInt: Int, comment: String, name: String) : this(
         Type.values().firstOrNull { it.value == typeInt }!!,

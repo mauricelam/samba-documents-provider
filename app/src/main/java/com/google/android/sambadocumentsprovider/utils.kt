@@ -44,7 +44,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.launch
 import java.lang.UnsupportedOperationException
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.reflect.KMutableProperty0
+import kotlin.reflect.KProperty
 import kotlin.reflect.KProperty0
 
 inline fun <T> catchExceptions(block: () -> T): T? {
@@ -298,18 +300,6 @@ class DropdownSelectorScope(private val expanded: MutableState<Boolean>) {
     }
 }
 
-fun <T> KMutableProperty0<T>.asMutableState(): MutableState<T> {
-    if (getDelegate() is MutableState<*>) {
-        return getDelegate() as MutableState<T>
-    }
-    return object : MutableState<T> {
-        override var value: T
-            get() = get()
-            set(value) {
-                set(value)
-            }
-
-        override fun component1(): T = value
-        override fun component2(): (T) -> Unit = { value = it }
-    }
-}
+operator fun <T> AtomicReference<T>.getValue(thisRef: Any?, property: KProperty<*>): T = get()
+operator fun <T> AtomicReference<T>.setValue(thisRef: Any?, property: KProperty<*>, value: T) =
+    set(value)
