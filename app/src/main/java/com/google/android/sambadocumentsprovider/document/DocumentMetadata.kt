@@ -227,7 +227,7 @@ class DocumentMetadata(var uri: Uri, private val entry: DirectoryEntry) {
                 return SMB_BASE_URI
             }
             val builder = SMB_BASE_URI.buildUpon().authority(childUri.authority)
-            for (segment in segments) {
+            for (segment in segments.dropLast(1)) {
                 builder.appendPath(segment)
             }
             return builder.build()

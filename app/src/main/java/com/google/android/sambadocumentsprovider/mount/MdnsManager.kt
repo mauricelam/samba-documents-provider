@@ -105,10 +105,7 @@ object MdnsManager {
     ): NsdServiceInfo {
         return suspendCoroutine {
             nsdManager.resolveService(serviceInfo, object : NsdManager.ResolveListener {
-                override fun onResolveFailed(
-                    serviceInfo: NsdServiceInfo?,
-                    errorCode: Int
-                ) {
+                override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {
                     it.resumeWithException(RuntimeException("Resolve failed: $errorCode"))
                 }
 

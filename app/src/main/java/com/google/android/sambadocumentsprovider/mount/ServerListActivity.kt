@@ -121,8 +121,7 @@ class ServerListActivity : AppCompatActivity() {
                         .clickable { addServerActivity(serviceInfo.toUriString()) },
                     icon = { Icon(Icons.Filled.Dns, "") }
                 ) {
-                    val portDescription = serviceInfo.port.takeIf { it != 455 }?.let { ":$it" }
-                    Text(text = "${serviceInfo.serviceName}${portDescription}")
+                    Text(serviceInfo.toUriString())
                 }
             }
             items(savedServerListState) { serverUri ->

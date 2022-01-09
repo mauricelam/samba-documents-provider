@@ -45,7 +45,9 @@ object DocumentIdHelper {
     fun toUriString(documentId: String): String = documentId
 
     fun NsdServiceInfo.toUriString(): String {
-        val port = port.takeUnless { it == 445 }?.let { ":$it" } ?: ""
+        val port = port.let { if (it == SMB_DEFAULT_PORT) "" else ":$it" }
         return "smb://${serviceName}.local${port}"
     }
+
+    private const val SMB_DEFAULT_PORT = 445
 }

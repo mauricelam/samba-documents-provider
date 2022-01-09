@@ -160,7 +160,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
     override fun queryChildDocuments(
         documentId: String,
         proj: Array<String>?,
-        sortOrder: String
+        sortOrder: String,
     ): Cursor {
         if (BuildConfig.DEBUG) Log.d(TAG, "Querying children documents under $documentId")
         val projection = proj ?: DEFAULT_DOCUMENT_PROJECTION
@@ -329,7 +329,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
         mimeType: String,
         displayName: String
     ): String {
-        return try {
+        try {
             val parentUri = toUri(parentDocumentId)
             val isDir = DocumentsContract.Document.MIME_TYPE_DIR == mimeType
             val entry = DirectoryEntry(
@@ -359,7 +359,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             // Put it to cache without stat, newly created stuff is likely to be changed soon.
             val metadata = DocumentMetadata(uri, entry)
             cache.put(metadata)
-            toDocumentId(uri)
+            return toDocumentId(uri)
         } catch (e: FileNotFoundException) {
             throw e
         } catch (e: IOException) {
@@ -418,11 +418,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             Log.w(TAG, "$documentId is not found. No need to delete it.", e)
             cache.remove(uri)
             val notifyUri = toNotifyUri(DocumentMetadata.buildParentUri(uri))
-            contentResolver.notifyChange(
-                notifyUri,
-                null,
-                NOTIFY_DELETE
-            )
+            contentResolver.notifyChange(notifyUri, null, NOTIFY_DELETE)
         } catch (e: IOException) {
             throw IllegalStateException(e)
         }
@@ -573,18 +569,15 @@ class SambaDocumentsProvider : DocumentsProvider() {
         pfd: ParcelFileDescriptor,
         bufferPool: ByteBufferPool
     ) {
-        val buffer = bufferPool.obtainBuffer()
         @Suppress("BlockingMethodInNonBlockingContext")
         withContext(Dispatchers.IO) {
             try {
                 ParcelFileDescriptor.AutoCloseInputStream(pfd).use { inputStream ->
                     client.openFile(uri, "w").use { file ->
-                        var size: Int
-                        val buf = ByteArray(buffer.capacity())
-                        while (inputStream.read(buf).also { size = it } > 0) {
-                            buffer.put(buf, 0, size)
-                            file.write(buffer, size)
-                            buffer.clear()
+                        bufferPool.useBuffer { buffer ->
+                            inputStream.read(buffer) {
+                                file.write(buffer)
+                            }
                         }
                     }
                 }
@@ -598,7 +591,6 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 throw e
             }
         }
-        bufferPool.recycleBuffer(buffer)
     }
 
     private fun writeAsync(uriString: String, writeFunc: suspend () -> Unit) {
@@ -631,18 +623,15 @@ class SambaDocumentsProvider : DocumentsProvider() {
         pfd: ParcelFileDescriptor,
         bufferPool: ByteBufferPool
     ) {
-        val buffer = bufferPool.obtainBuffer()
         @Suppress("BlockingMethodInNonBlockingContext")
         withContext(Dispatchers.IO) {
             try {
                 ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { os ->
                     client.openFile(uri, "r").use { file ->
-                        var size: Int
-                        val buf = ByteArray(buffer.capacity())
-                        while (file.read(buffer, Int.MAX_VALUE).also { size = it } > 0) {
-                            buffer[buf, 0, size]
-                            os.write(buf, 0, size)
-                            buffer.clear()
+                        bufferPool.useBuffer { buffer ->
+                            file.read(buffer) {
+                                os.write(buffer)
+                            }
                         }
                     }
                 }
@@ -655,7 +644,6 @@ class SambaDocumentsProvider : DocumentsProvider() {
                 }
             }
         }
-        bufferPool.recycleBuffer(buffer)
     }
 
     private val lifecycleScope: CoroutineScope = GlobalScope
