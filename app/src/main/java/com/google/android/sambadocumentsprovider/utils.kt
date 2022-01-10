@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFile
+import com.google.android.sambadocumentsprovider.provider.ByteBufferPool
 import kotlinx.coroutines.launch
 import java.io.InputStream
 import java.io.OutputStream
@@ -303,37 +304,6 @@ class DropdownSelectorScope(private val expanded: MutableState<Boolean>) {
         )
     }
 }
-
-inline fun InputStream.read(buffer: ByteBuffer, block: () -> Unit) {
-    while (true) {
-        val size = read(
-            buffer.array(),
-            buffer.arrayOffset() + buffer.position(),
-            buffer.remaining()
-        )
-        if (size <= 0) break
-        buffer.limit(buffer.position() + size)
-        block()
-        buffer.clear()
-    }
-}
-
-inline fun SmbFile.read(buffer: ByteBuffer, block: () -> Unit) {
-    while (true) {
-        val size = read(buffer, Int.MAX_VALUE)
-        if (size <= 0) break
-        buffer.limit(buffer.position() + size)
-        block()
-    }
-}
-
-fun SmbFile.write(buffer: ByteBuffer) = write(buffer, buffer.remaining())
-
-fun OutputStream.write(buffer: ByteBuffer) = write(
-    buffer.array(),
-    buffer.arrayOffset() + buffer.position(),
-    buffer.remaining()
-)
 
 operator fun <T> AtomicReference<T>.getValue(thisRef: Any?, property: KProperty<*>): T = get()
 operator fun <T> AtomicReference<T>.setValue(thisRef: Any?, property: KProperty<*>, value: T) =

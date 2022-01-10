@@ -44,8 +44,7 @@ import com.google.android.sambadocumentsprovider.base.DocumentIdHelper.toUriStri
 import com.google.android.sambadocumentsprovider.cache.CacheResult
 import com.google.android.sambadocumentsprovider.cache.DocumentCache
 import com.google.android.sambadocumentsprovider.document.DocumentMetadata
-import com.google.android.sambadocumentsprovider.nativefacade.SmbClient
-import com.google.android.sambadocumentsprovider.nativefacade.SmbFacade
+import com.google.android.sambadocumentsprovider.nativefacade.*
 import kotlinx.coroutines.*
 import java.io.FileNotFoundException
 import java.io.IOException
@@ -574,11 +573,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             try {
                 ParcelFileDescriptor.AutoCloseInputStream(pfd).use { inputStream ->
                     client.openFile(uri, "w").use { file ->
-                        bufferPool.useBuffer { buffer ->
-                            inputStream.read(buffer) {
-                                file.write(buffer)
-                            }
-                        }
+                        inputStream.copyTo(file.outputStream(bufferPool))
                     }
                 }
             } catch (e: IOException) {
@@ -628,11 +623,7 @@ class SambaDocumentsProvider : DocumentsProvider() {
             try {
                 ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { os ->
                     client.openFile(uri, "r").use { file ->
-                        bufferPool.useBuffer { buffer ->
-                            file.read(buffer) {
-                                os.write(buffer)
-                            }
-                        }
+                        file.inputStream(bufferPool).copyTo(os)
                     }
                 }
             } catch (e: IOException) {

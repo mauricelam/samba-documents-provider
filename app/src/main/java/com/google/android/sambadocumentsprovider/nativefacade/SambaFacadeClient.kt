@@ -29,8 +29,10 @@ import java.io.IOException
 
 internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseClient(), SmbFacade {
 
+    override val handler: BaseHandler = SambaServiceHandler(looper, clientImpl)
+
     private fun obtainMessage(what: Int, messageValues: MessageValues<*>, uri: String?): Message {
-        val msg = mHandler.obtainMessage(what, messageValues)
+        val msg = handler.obtainMessage(what, messageValues)
         val args = msg.data
         args.putString(URI, uri)
         return msg
@@ -48,7 +50,7 @@ internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseCl
         MessageValues.obtain<SmbDir>().use { messageValues ->
             val msg = obtainMessage(READ_DIR, messageValues, uri)
             enqueue(msg)
-            return SambaDirClient(mHandler.looper, messageValues.obj)
+            return SambaDirClient(handler.looper, messageValues.obj)
         }
     }
 
@@ -109,7 +111,7 @@ internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseCl
 
     @Throws(IOException::class)
     override fun openFile(uri: String, mode: String): SmbFile {
-        return SambaFileClient(mHandler.looper, openFileRaw(uri, mode))
+        return SambaFileClient(handler.looper, openFileRaw(uri, mode))
     }
 
     @TargetApi(26)
@@ -125,7 +127,7 @@ internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseCl
         return storageManager.openProxyFileDescriptor(
             ParcelFileDescriptor.parseMode(mode),
             sambaProxyFileCallback,
-            mHandler
+            handler
         ) to sambaProxyFileCallback.deferred
     }
 
@@ -149,7 +151,7 @@ internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseCl
         looper: Looper,
         private val mClientImpl: SmbClient
     ) : BaseHandler(looper) {
-        public override fun processMessage(msg: Message) {
+        override fun processMessage(msg: Message) {
             val args = msg.peekData()
             val uri = args.getString(URI)
             val messageValues = msg.obj as MessageValues<Any>
@@ -193,9 +195,5 @@ internal class SambaFacadeClient(looper: Looper, clientImpl: SmbClient) : BaseCl
         private const val URI = "URI"
         private const val NEW_URI = "NEW_URI"
         private const val MODE = "MODE"
-    }
-
-    init {
-        mHandler = SambaServiceHandler(looper, clientImpl)
     }
 }

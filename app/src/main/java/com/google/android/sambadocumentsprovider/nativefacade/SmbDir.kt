@@ -14,20 +14,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+package com.google.android.sambadocumentsprovider.nativefacade
 
-package com.google.android.sambadocumentsprovider.nativefacade;
+import com.google.android.sambadocumentsprovider.base.DirectoryEntry
+import java.io.Closeable
+import java.io.IOException
 
-import android.system.StructStat;
-
-import java.io.Closeable;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-
-public interface SmbFile extends Closeable {
-
-  int read(ByteBuffer buffer, int maxLen) throws IOException;
-  int write(ByteBuffer buffer, int length) throws IOException;
-  long seek(long offset) throws IOException;
-  StructStat fstat() throws IOException;
-
+interface SmbDir : Closeable {
+    @Throws(IOException::class)
+    fun readDir(): DirectoryEntry?
 }

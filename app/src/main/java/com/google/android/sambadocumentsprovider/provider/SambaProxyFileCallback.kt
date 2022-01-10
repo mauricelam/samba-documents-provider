@@ -23,6 +23,8 @@ import android.system.OsConstants
 import android.system.StructStat
 import android.util.Log
 import com.google.android.sambadocumentsprovider.nativefacade.SmbFile
+import com.google.android.sambadocumentsprovider.nativefacade.inputStream
+import com.google.android.sambadocumentsprovider.nativefacade.outputStream
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import java.io.IOException
@@ -52,17 +54,8 @@ class SambaProxyFileCallback(
 
     @Throws(ErrnoException::class)
     override fun onRead(offset: Long, size: Int, data: ByteArray): Int {
-        val buffer = bufferPool.obtainBuffer()
         try {
-            file.seek(offset)
-            var readSize = 0
-            var total = 0
-            while (size > total && file.read(buffer, size - total).also { readSize = it } > 0) {
-                buffer[data, total, readSize]
-                buffer.clear()
-                total += readSize
-            }
-            return total
+            return file.inputStream(bufferPool).read(data, 0, size)
         } catch (e: IOException) {
             throwErrnoException(e)
         }
@@ -71,23 +64,16 @@ class SambaProxyFileCallback(
 
     @Throws(ErrnoException::class)
     override fun onWrite(offset: Long, size: Int, data: ByteArray): Int {
-        var written = 0
-        val buffer = bufferPool.obtainBuffer()
         try {
-            file.seek(offset)
-            while (written < size) {
-                val willWrite = Math.min(size - written, buffer.capacity())
-                buffer.put(data, written, willWrite)
-                val res = file.write(buffer, willWrite)
-                written += res
-                buffer.clear()
-            }
+            file.outputStream(bufferPool).write(data, 0, size)
+            return size
         } catch (e: IOException) {
+            Log.e(TAG, "onWrite errno", e)
             throwErrnoException(e)
-        } finally {
-            bufferPool.recycleBuffer(buffer)
+        } catch (e: Exception) {
+            Log.e(TAG, "onWrite error", e)
         }
-        return written
+        return 0
     }
 
     @Throws(ErrnoException::class)
